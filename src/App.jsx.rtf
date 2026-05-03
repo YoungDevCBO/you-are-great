@@ -1,4 +1,4 @@
-{\rtf1\ansi\deff0\nouicompat{\fonttbl{\f0\fnil\fcharset0 Calibri;}{\f1\fnil Calibri;}{\f2\fnil\fcharset1 Cambria Math;}{\f3\fnil\fcharset1 Segoe UI Symbol;}{\f4\fnil\fcharset1 Segoe UI Symbol;}}
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat{\fonttbl{\f0\fnil\fcharset0 Calibri;}{\f1\fnil Calibri;}{\f2\fnil\fcharset1 Cambria Math;}{\f3\fnil\fcharset0 Cambria Math;}}
 {\colortbl ;\red0\green0\blue255;}
 {\*\generator Riched20 10.0.19041}{\*\mmathPr\mmathFont2\mwrapIndent1440 }\viewkind4\uc1 
 \pard\sa200\sl276\slmult1\f0\fs22\lang9 import \{ useState, useEffect, useCallback \} from "react";\par
@@ -547,160 +547,12 @@ export default function App() \{\par
   );\par
 \par
   // PLAN\par
-  if (step === "plan") return (\par
-    <div style=\{page\}>\par
-      <div style=\{\{ ...card(520) \}\}>\par
-        <LangToggle />\par
-        <div style=\{\{ textAlign: "center", marginBottom: "28px" \}\}>\par
-          <h2 style=\{\{ fontSize: "26px", color: C.text, margin: "0 0 6px", fontWeight: "800" \}\}>\par
-            \{sw ? "Chagua Mpango Wako" : "Choose Your Plan"\}\par
-          </h2>\par
-          <p style=\{\{ color: C.muted, fontSize: "14px", margin: 0 \}\}>\par
-            \{sw ? "Anza bila malipo. Panda ngazi ukiwa tayari." : "Start free. Upgrade when you're ready."\}\par
-          </p>\par
-        </div>\par
-        <div style=\{\{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" \}\}>\par
-          <div style=\{\{ border: `1.5px solid $\{C.border\}`, borderRadius: "16px", padding: "22px" \}\}>\par
-            <p style=\{\{ color: C.muted, fontSize: "10px", letterSpacing: "1.5px", fontWeight: "700", margin: "0 0 6px" \}\}>\{sw ? "BURE" : "FREE"\}</p>\par
-            <p style=\{\{ fontSize: "28px", color: C.text, margin: "0 0 2px", fontWeight: "900" \}\}>Ksh 0</p>\par
-            <p style=\{\{ color: C.muted, fontSize: "12px", margin: "0 0 16px" \}\}>\{sw ? "milele" : "forever"\}</p>\par
-            <div style=\{\{ borderTop: `1px solid $\{C.border\}`, paddingTop: "12px", marginBottom: "16px" \}\}>\par
-              \{(sw ? ["Maneno mazuri ya kila siku", "Kiingereza au Kiswahili", "Bila malipo milele"] : ["Daily uplifting affirmations", "English or Kiswahili", "Always free"]).map(f => (\par
-                <div key=\{f\} style=\{\{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "flex-start" \}\}>\par
-                  <span style=\{\{ color: C.green, fontSize: "12px", marginTop: "2px", flexShrink: 0 \}\}>\f3\u10003?\f0 </span>\par
-                  <span style=\{\{ color: C.muted, fontSize: "13px" \}\}>\{f\}</span>\par
-                </div>\par
-              ))\}\par
-              \{(sw ? ["Maneno ya kibinafsi kwako", "Kulingana na hali yako"] : ["Personalized to you", "Based on your real situation"]).map(f => (\par
-                <div key=\{f\} style=\{\{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "flex-start" \}\}>\par
-                  <span style=\{\{ color: C.border, fontSize: "12px", marginTop: "2px", flexShrink: 0 \}\}>\f1\emdash </span>\par
-                  <span style=\{\{ color: C.border, fontSize: "13px" \}\}>\{f\}</span>\par
-                </div>\par
-              ))\}\par
-            </div>\par
-            <button\par
-              onClick=\{async () => \{ setIsPremium(false); const \{ data: \{ user: u \} \} = await supabase.auth.getUser(); if (u) await saveProfile(u.id, profile, false); setStep("home"); \}\}\par
-              style=\{\{ border: `1.5px solid $\{C.border\}`, background: "transparent", borderRadius: "10px", padding: "12px", width: "100%", cursor: "pointer", fontFamily: "inherit", fontSize: "14px", color: C.muted, fontWeight: "600" \}\}\par
-            >\par
-              \{sw ? "Anza Bure" : "Start Free"\}\par
-            </button>\par
-          </div>\par
-          <div style=\{\{ border: `2px solid $\{C.green\}`, borderRadius: "16px", padding: "22px", background: C.greenLight, position: "relative" \}\}>\par
-            <div style=\{\{ position: "absolute", top: "-12px", left: "50%", transform: "translateX(-50%)", background: C.green, color: "white", fontSize: "10px", fontWeight: "700", letterSpacing: "1px", padding: "4px 14px", borderRadius: "20px", whiteSpace: "nowrap" \}\}>\par
-              \{sw ? "MAARUFU ZAIDI" : "MOST POPULAR"\}\par
-            </div>\par
-            <p style=\{\{ color: C.green, fontSize: "10px", letterSpacing: "1.5px", fontWeight: "700", margin: "0 0 6px" \}\}>PREMIUM</p>\par
-            <p style=\{\{ fontSize: "28px", color: C.text, margin: "0 0 2px", fontWeight: "900" \}\}>Ksh 200</p>\par
-            <p style=\{\{ color: C.muted, fontSize: "12px", margin: "0 0 16px" \}\}>\{sw ? "/mwezi" : "/month"\}</p>\par
-            <div style=\{\{ borderTop: `1px solid $\{C.greenBorder\}`, paddingTop: "12px", marginBottom: "16px" \}\}>\par
-              \{(sw ? ["Maneno mazuri ya kila siku", "Kiingereza au Kiswahili", "Maneno ya kibinafsi kwako", "Kulingana na hali yako", "Malipo kupitia M-Pesa"] : ["Daily uplifting affirmations", "English or Kiswahili", "Personalized to your life", "Based on your real situation", "Pay easily via M-Pesa"]).map(f => (\par
-                <div key=\{f\} style=\{\{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "flex-start" \}\}>\par
-                  <span style=\{\{ color: C.green, fontSize: "12px", marginTop: "2px", flexShrink: 0 \}\}>\f3\u10003?\f0 </span>\par
-                  <span style=\{\{ color: C.muted, fontSize: "13px" \}\}>\{f\}</span>\par
-                </div>\par
-              ))\}\par
-            </div>\par
-            <button\par
-              onClick=\{async () => \{ setIsPremium(true); const \{ data: \{ user: u \} \} = await supabase.auth.getUser(); if (u) await saveProfile(u.id, profile, true); setStep("home"); \}\}\par
-              style=\{\{ background: C.green, border: "none", borderRadius: "10px", padding: "12px", width: "100%", cursor: "pointer", fontFamily: "inherit", fontSize: "14px", color: "white", fontWeight: "600" \}\}\par
-            >\par
-              \{sw ? "Anza Premium" : "Start Premium"\}\par
-            </button>\par
-          </div>\par
-        </div>\par
-        <div style=\{\{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", color: C.muted, fontSize: "13px" \}\}>\par
-          <span>\f4\u-10179?\u-8975?\f0 </span>\par
-          <span>\{sw ? "Malipo kupitia M-Pesa \f1\emdash  Ksh 200 tu kwa mwezi" : "Pay via M-Pesa \emdash  just Ksh 200 a month"\}</span>\par
-        </div>\par
-      </div>\par
-    </div>\par
-  );\par
-\par
-  // HOME\par
-  const hour = new Date().getHours();\par
-  const greeting = hour < 12 ? (sw ? "Habari ya asubuhi" : "Good morning") : hour < 17 ? (sw ? "Habari ya mchana" : "Good afternoon") : (sw ? "Habari ya jioni" : "Good evening");\par
-  const today = new Date().toLocaleDateString(sw ? "sw-KE" : "en-KE", \{ weekday: "long", month: "long", day: "numeric" \});\par
-  const activePillar = PILLARS.find(p => p.id === profile.pillar);\par
-\par
-  return (\par
-    <div style=\{page\}>\par
-      <div style=\{\{ ...card(500) \}\}>\par
-        <div style=\{\{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" \}\}>\par
-          <div>\par
-            <div style=\{\{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" \}\}>\par
-              <span style=\{\{ fontWeight: "900", fontSize: "18px", color: C.green, letterSpacing: "-0.5px" \}\}>You Are Great</span>\par
-            </div>\par
-            <p style=\{\{ margin: 0, color: C.text, fontSize: "14px", fontWeight: "600" \}\}>\{greeting\}, \{profile.name\} \f4\u-10179?\u-9141?\f0 </p>\par
-            <p style=\{\{ margin: "2px 0 0", color: C.muted, fontSize: "12px" \}\}>\{today\}</p>\par
-          </div>\par
-          <div style=\{\{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" \}\}>\par
-            <div style=\{\{ background: isPremium ? C.green : C.border, color: "white", padding: "4px 10px", borderRadius: "20px", fontSize: "10px", fontWeight: "700", letterSpacing: "1px" \}\}>\par
-              \{isPremium ? "PREMIUM" : sw ? "BURE" : "FREE"\}\par
-            </div>\par
-            <LangToggle right />\par
-          </div>\par
-        </div>\par
-\par
-        <div style=\{\{ display: "flex", gap: "10px", marginBottom: "20px" \}\}>\par
-          <div style=\{\{ flex: 1, background: C.goldLight, border: `1px solid $\{C.goldBorder\}`, borderRadius: "12px", padding: "12px 14px", display: "flex", alignItems: "center", gap: "8px" \}\}>\par
-            <span style=\{\{ fontSize: "18px" \}\}>\f4\u-10179?\u-8923?\f0 </span>\par
-            <div>\par
-              <span style=\{\{ color: "#7A4A00", fontSize: "15px", fontWeight: "700" \}\}>\{streak\}</span>\par
-              <span style=\{\{ color: "#7A4A00", fontSize: "13px" \}\}>\{sw ? " siku mfululizo" : "-day streak"\}</span>\par
-            </div>\par
-          </div>\par
-          \{activePillar && (\par
-            <div style=\{\{ flex: 1, background: activePillar.light, border: `1px solid $\{activePillar.color\}30`, borderRadius: "12px", padding: "12px 14px", display: "flex", alignItems: "center" \}\}>\par
-              <span style=\{\{ color: activePillar.color, fontSize: "13px", fontWeight: "700" \}\}>\{sw ? activePillar.sw : activePillar.en\}</span>\par
-            </div>\par
-          )\}\par
-        </div>\par
-\par
-        <div style=\{\{ background: isPremium ? "#F0FAF4" : C.bg, border: `2px solid $\{isPremium ? C.greenMid : C.border\}`, borderRadius: "18px", padding: "30px 28px", marginBottom: "16px", minHeight: "170px", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative" \}\}>\par
-          \{isPremium && <span style=\{\{ position: "absolute", top: "14px", right: "16px", color: C.greenMid, fontSize: "11px", fontWeight: "600" \}\}>\{sw ? "\f3\u10022?\f0  imeandikwa kwa ajili yako" : "\f3\u10022?\f0  written for you"\}</span>\}\par
-          \{loading ? (\par
-            <p style=\{\{ textAlign: "center", color: C.muted, fontSize: "15px", margin: 0, fontStyle: "italic" \}\}>\par
-              \{sw ? "Inaandika maneno yako..." : "Writing your affirmation..."\}\par
-            </p>\par
-          ) : (\par
-            <p style=\{\{ fontSize: "19px", lineHeight: 1.8, color: C.text, margin: 0, fontStyle: "italic" \}\}>"\{affirmation\}"</p>\par
-          )\}\par
-        </div>\par
-\par
-        <div style=\{\{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "16px" \}\}>\par
-          <button onClick=\{() => fetchAffirmation()\} disabled=\{loading\} style=\{\{ border: `1.5px solid $\{C.border\}`, background: "transparent", borderRadius: "10px", padding: "13px", cursor: "pointer", fontFamily: "inherit", fontSize: "14px", color: C.muted, fontWeight: "600", opacity: loading ? 0.5 : 1 \}\}>\par
-            \{sw ? "\f2\u8635?\f0  Maneno Mapya" : "\f2\u8635?\f0  New affirmation"\}\par
-          </button>\par
-          <button onClick=\{() => setSaved(s => !s)\} style=\{\{ background: saved ? C.greenLight : C.green, border: saved ? `1.5px solid $\{C.green\}` : "none", borderRadius: "10px", padding: "13px", cursor: "pointer", fontFamily: "inherit", fontSize: "14px", color: saved ? C.green : "white", fontWeight: "600" \}\}>\par
-            \{saved ? (sw ? "\f3\u10003?\f0  Imehifadhiwa" : "\f3\u10003?\f0  Saved") : (sw ? "Hifadhi" : "Save")\}\par
-          </button>\par
-        </div>\par
-\par
-        \{!isPremium && (\par
-          <div style=\{\{ background: C.greenLight, border: `1px solid $\{C.greenBorder\}`, borderRadius: "14px", padding: "14px 16px", display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" \}\}>\par
-            <span style=\{\{ fontSize: "20px", flexShrink: 0 \}\}>\f3\u10022?\f0 </span>\par
-            <div style=\{\{ flex: 1 \}\}>\par
-              <p style=\{\{ margin: "0 0 2px", fontSize: "14px", color: C.green, fontWeight: "700" \}\}>\{sw ? "Pata maneno ya kibinafsi" : "Get affirmations made for you"\}</p>\par
-              <p style=\{\{ margin: 0, fontSize: "12px", color: C.muted \}\}>\{sw ? "Ksh 200/mwezi kupitia M-Pesa" : "Ksh 200/month via M-Pesa"\}</p>\par
-            </div>\par
-            <button onClick=\{async () => \{ setIsPremium(true); const \{ data: \{ user: u \} \} = await supabase.auth.getUser(); if (u) await saveProfile(u.id, profile, true); fetchAffirmation(true); \}\} style=\{\{ background: C.green, color: "white", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", fontWeight: "600", whiteSpace: "nowrap" \}\}>\par
-              \{sw ? "Panda Ngazi" : "Upgrade"\}\par
-            </button>\par
-          </div>\par
-        )\}\par
-\par
-        <div style=\{\{ textAlign: "center", paddingTop: "14px", borderTop: `1px solid $\{C.border\}`, display: "flex", alignItems: "center", justifyContent: "center", gap: "16px" \}\}>\par
-          <p style=\{\{ margin: 0, color: C.muted, fontSize: "12px" \}\}>\par
-            \{sw ? "Programu ya " : "A program by "\}\par
-            <strong style=\{\{ color: C.green \}\}>YoungDev</strong>\par
-          </p>\par
-          <button onClick=\{handleSignOut\} style=\{\{ background: "transparent", border: "none", color: C.muted, fontSize: "12px", cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" \}\}>\par
-            \{sw ? "Toka" : "Sign out"\}\par
-          </button>\par
-        </div>\par
-      </div>\par
-    </div>\par
-  );\par
-\}\lang9\par
+  if\f3  (\f0 step\f3  === \f0 "plan"\f3 ) \{\f0\par
+\f3   \f0 const\f3  \{ \f0 data\f3 : \{ \f0 user\f3 : \f0 u\f3  \} \} = \f0 await\f3  \f0 supabase\f3 .\f0 auth\f3 .\f0 getUser\f3 ().\f0 catch\f3 (() => (\{ \f0 data\f3 : \{\} \}));\f0\par
+\f3   \f0 if\f3  (\f0 u\f3 ) \f0 await\f3  \f0 saveProfile\f3 (\f0 u\f3 .\f0 id\f3 , \f0 profile\f3 , \f0 true\f3 );\f0\par
+\f3   \f0 setIsPremium\f3 (\f0 true\f3 );\f0\par
+\f3   \f0 setStep\f3 (\f0 "home"\f3 );\f0\par
+\f3   \f0 return\f3  \f0 null\f3 ;\f0\par
+\f3\}\f0\par
 }
  

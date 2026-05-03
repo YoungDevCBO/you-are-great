@@ -1,0 +1,706 @@
+{\rtf1\ansi\deff0\nouicompat{\fonttbl{\f0\fnil\fcharset0 Calibri;}{\f1\fnil Calibri;}{\f2\fnil\fcharset1 Cambria Math;}{\f3\fnil\fcharset1 Segoe UI Symbol;}{\f4\fnil\fcharset1 Segoe UI Symbol;}}
+{\colortbl ;\red0\green0\blue255;}
+{\*\generator Riched20 10.0.19041}{\*\mmathPr\mmathFont2\mwrapIndent1440 }\viewkind4\uc1 
+\pard\sa200\sl276\slmult1\f0\fs22\lang9 import \{ useState, useEffect, useCallback \} from "react";\par
+import \{ supabase \} from "./supabase";\par
+\par
+const API_URL = "{{\field{\*\fldinst{HYPERLINK https://api.anthropic.com/v1/messages }}{\fldrslt{https://api.anthropic.com/v1/messages\ul0\cf0}}}}\f0\fs22 ";\par
+\par
+const PILLARS = [\par
+  \{\par
+    id: "employment",\par
+    en: "Work & Employment",\par
+    sw: "Kazi na Ajira",\par
+    desc_en: "Job hunting, career growth, unemployment",\par
+    desc_sw: "Kutafuta kazi, kukua kwa kazi, ukosefu wa ajira",\par
+    color: "#1B5E3B",\par
+    light: "#E8F5EE",\par
+  \},\par
+  \{\par
+    id: "mental",\par
+    en: "Mental Wellness",\par
+    sw: "Afya ya Akili",\par
+    desc_en: "Anxiety, stress, emotional wellbeing",\par
+    desc_sw: "Wasiwasi, msongo wa mawazo, afya ya kihisia",\par
+    color: "#1C3A5C",\par
+    light: "#E8EFF7",\par
+  \},\par
+  \{\par
+    id: "entrepreneurship",\par
+    en: "Entrepreneurship",\par
+    sw: "Ujasiriamali",\par
+    desc_en: "Building a business, hustle, starting out",\par
+    desc_sw: "Kujenga biashara, kujaribu, kuanza upya",\par
+    color: "#7A3F00",\par
+    light: "#FFF3E0",\par
+  \},\par
+];\par
+\par
+const C = \{\par
+  green: "#1B5E3B",\par
+  greenMid: "#2D7D52",\par
+  greenLight: "#E8F5EE",\par
+  greenBorder: "#A8D5BB",\par
+  gold: "#C47D0A",\par
+  goldLight: "#FFF8EC",\par
+  goldBorder: "#F0C060",\par
+  bg: "#F4F6F3",\par
+  card: "#FFFFFF",\par
+  text: "#0D1F14",\par
+  muted: "#586B5E",\par
+  border: "#D6E2DA",\par
+\};\par
+\par
+async function makeAffirmation(profile, isPremium, lang) \{\par
+  const sw = lang === "sw";\par
+  const pillar = PILLARS.find(p => p.id === profile.pillar);\par
+  const pillarLabel = pillar ? (sw ? pillar.sw : pillar.en) : "personal growth";\par
+\par
+  const system = sw\par
+    ? "Wewe ni rafiki wa karibu na mwenye hekima. Andika maneno ya kutia moyo kwa Kiswahili safi cha Kenya. Maneno ya sasa, ya moja kwa moja. Sentensi 2 hadi 3 tu. Usiandike alama za nukuu wala utangulizi."\par
+    : "You are a warm, wise friend. Write affirmations in direct, grounded English. Present tense. 2 to 3 sentences only. No quote marks, no preamble, just the words.";\par
+\par
+  const user = isPremium && profile.name\par
+    ? sw\par
+      ? `Andika maneno ya kutia moyo ya kibinafsi kabisa kwa $\{profile.name\}, kijana wa Kenya mwenye umri wa miaka $\{profile.age\}. Wanajishughulisha na: $\{pillarLabel\}. Hali yao ya sasa: "$\{profile.situation || "wanajaribu kupata njia yao maishani"\}". Yafanye yaonekane yameandikwa kwa ajili yao peke yao.`\par
+      : `Write a deeply personal affirmation for $\{profile.name\}, a $\{profile.age\}-year-old young Kenyan focused on $\{pillarLabel\}. Their current situation: "$\{profile.situation || "finding their footing in life"\}". Make it feel like it was written for them and no one else.`\par
+    : sw\par
+      ? "Andika maneno mazuri ya kutia moyo kwa kijana yeyote wa Kenya kati ya miaka 18 na 35 anayejaribu kufanikiwa."\par
+      : "Write a powerful, grounded daily affirmation for any young Kenyan aged 18-35 navigating life's challenges.";\par
+\par
+  const res = await fetch(API_URL, \{\par
+    method: "POST",\par
+    headers: \{ "Content-Type": "application/json" \},\par
+    body: JSON.stringify(\{\par
+      model: "claude-sonnet-4-20250514",\par
+      max_tokens: 1000,\par
+      system,\par
+      messages: [\{ role: "user", content: user \}],\par
+    \}),\par
+  \});\par
+  const data = await res.json();\par
+  return (\par
+    data.content?.[0]?.text ??\par
+    (sw\par
+      ? "Wewe una nguvu zaidi kuliko unavyofikiri. Leo unachukua hatua moja mbele."\par
+      : "You are more capable than you know. Today, one step forward is enough.")\par
+  );\par
+\}\par
+\par
+export default function App() \{\par
+  const [step, setStep] = useState("loading");\par
+  const [lang, setLang] = useState("en");\par
+  const [profile, setProfile] = useState(\{ name: "", age: "", pillar: "", situation: "" \});\par
+  const [isPremium, setIsPremium] = useState(false);\par
+  const [affirmation, setAffirmation] = useState("");\par
+  const [loading, setLoading] = useState(false);\par
+  const [saved, setSaved] = useState(false);\par
+  const [streak] = useState(4);\par
+  const [user, setUser] = useState(null);\par
+  const [authMode, setAuthMode] = useState("signin");\par
+  const [authEmail, setAuthEmail] = useState("");\par
+  const [authPassword, setAuthPassword] = useState("");\par
+  const [authError, setAuthError] = useState("");\par
+  const [authLoading, setAuthLoading] = useState(false);\par
+\par
+  const sw = lang === "sw";\par
+\par
+  useEffect(() => \{\par
+    supabase.auth.getSession().then((\{ data: \{ session \} \}) => \{\par
+      if (session?.user) \{\par
+        setUser(session.user);\par
+        loadProfile(session.user.id);\par
+      \} else \{\par
+        setStep("welcome");\par
+      \}\par
+    \});\par
+\par
+    const \{ data: \{ subscription \} \} = supabase.auth.onAuthStateChange((_event, session) => \{\par
+      if (session?.user) \{\par
+        setUser(session.user);\par
+      \} else \{\par
+        setUser(null);\par
+        setStep("welcome");\par
+      \}\par
+    \});\par
+\par
+    return () => subscription.unsubscribe();\par
+  \}, []);\par
+\par
+  const loadProfile = async (userId) => \{\par
+    const \{ data \} = await supabase\par
+      .from("profiles")\par
+      .select("*")\par
+      .eq("id", userId)\par
+      .single();\par
+\par
+    if (data) \{\par
+      setProfile(\{\par
+        name: data.name || "",\par
+        age: data.age || "",\par
+        pillar: data.pillar || "",\par
+        situation: data.situation || "",\par
+      \});\par
+      setIsPremium(data.is_premium || false);\par
+      setStep("home");\par
+    \} else \{\par
+      setStep("welcome");\par
+    \}\par
+  \};\par
+\par
+  const saveProfile = async (userId, profileData, premium) => \{\par
+    await supabase.from("profiles").upsert(\{\par
+      id: userId,\par
+      name: profileData.name,\par
+      age: profileData.age,\par
+      pillar: profileData.pillar,\par
+      situation: profileData.situation,\par
+      is_premium: premium,\par
+    \});\par
+  \};\par
+\par
+  const handleSignUp = async () => \{\par
+    setAuthLoading(true);\par
+    setAuthError("");\par
+    const \{ error \} = await supabase.auth.signUp(\{\par
+      email: authEmail,\par
+      password: authPassword,\par
+    \});\par
+    if (error) \{\par
+      setAuthError(error.message);\par
+    \} else \{\par
+      setStep("onboard1");\par
+    \}\par
+    setAuthLoading(false);\par
+  \};\par
+\par
+  const handleSignIn = async () => \{\par
+    setAuthLoading(true);\par
+    setAuthError("");\par
+    const \{ data, error \} = await supabase.auth.signInWithPassword(\{\par
+      email: authEmail,\par
+      password: authPassword,\par
+    \});\par
+    if (error) \{\par
+      setAuthError(error.message);\par
+    \} else \{\par
+      await loadProfile(data.user.id);\par
+    \}\par
+    setAuthLoading(false);\par
+  \};\par
+\par
+  const handleSignOut = async () => \{\par
+    await supabase.auth.signOut();\par
+    setProfile(\{ name: "", age: "", pillar: "", situation: "" \});\par
+    setIsPremium(false);\par
+    setAffirmation("");\par
+    setStep("welcome");\par
+  \};\par
+\par
+  const fetchAffirmation = useCallback(\par
+    async (prem = isPremium, language = lang) => \{\par
+      setLoading(true);\par
+      setSaved(false);\par
+      try \{\par
+        const text = await makeAffirmation(profile, prem, language);\par
+        setAffirmation(text);\par
+      \} catch \{\par
+        setAffirmation(\par
+          language === "sw"\par
+            ? "Wewe una nguvu. Wewe una uwezo. Leo ni siku yako ya kupiga hatua."\par
+            : "You are enough. You are capable. Today is your day to take one step forward."\par
+        );\par
+      \}\par
+      setLoading(false);\par
+    \},\par
+    [profile, isPremium, lang]\par
+  );\par
+\par
+  useEffect(() => \{\par
+    if (step === "home") fetchAffirmation();\par
+  \}, [step]);\par
+\par
+  const page = \{\par
+    minHeight: "100vh",\par
+    background: C.bg,\par
+    display: "flex",\par
+    alignItems: "center",\par
+    justifyContent: "center",\par
+    padding: "20px",\par
+    boxSizing: "border-box",\par
+    fontFamily: "'Helvetica Neue', Arial, sans-serif",\par
+  \};\par
+\par
+  const card = (maxW = 460) => (\{\par
+    background: C.card,\par
+    borderRadius: "20px",\par
+    border: `1px solid $\{C.border\}`,\par
+    padding: "36px",\par
+    maxWidth: `$\{maxW\}px`,\par
+    width: "100%",\par
+    boxSizing: "border-box",\par
+  \});\par
+\par
+  const LangToggle = (\{ right = false \}) => (\par
+    <div style=\{\{ display: "flex", gap: "6px", marginBottom: right ? 0 : "20px", justifyContent: right ? "flex-end" : "flex-start" \}\}>\par
+      \{[["en", "ENG"], ["sw", "KSW"]].map(([l, label]) => (\par
+        <button\par
+          key=\{l\}\par
+          onClick=\{() => \{\par
+            setLang(l);\par
+            if (step === "home") fetchAffirmation(isPremium, l);\par
+          \}\}\par
+          style=\{\{\par
+            padding: "4px 12px",\par
+            borderRadius: "20px",\par
+            border: `1.5px solid $\{lang === l ? C.green : C.border\}`,\par
+            background: lang === l ? C.greenLight : "transparent",\par
+            color: lang === l ? C.green : C.muted,\par
+            fontSize: "11px",\par
+            cursor: "pointer",\par
+            fontFamily: "inherit",\par
+            fontWeight: lang === l ? "700" : "400",\par
+            letterSpacing: "0.5px",\par
+          \}\}\par
+        >\par
+          \{label\}\par
+        </button>\par
+      ))\}\par
+    </div>\par
+  );\par
+\par
+  const ProgressBar = () => \{\par
+    const steps = ["onboard1", "onboard2", "onboard3", "plan"];\par
+    const idx = steps.indexOf(step);\par
+    return (\par
+      <div style=\{\{ display: "flex", gap: "5px", marginBottom: "18px" \}\}>\par
+        \{steps.map((_, i) => (\par
+          <div key=\{i\} style=\{\{ height: "3px", flex: 1, borderRadius: "2px", background: i <= idx ? C.green : C.border \}\} />\par
+        ))\}\par
+      </div>\par
+    );\par
+  \};\par
+\par
+  const inputStyle = \{\par
+    width: "100%",\par
+    border: `1.5px solid $\{C.border\}`,\par
+    borderRadius: "10px",\par
+    padding: "13px 14px",\par
+    fontSize: "15px",\par
+    fontFamily: "inherit",\par
+    color: C.text,\par
+    background: C.bg,\par
+    boxSizing: "border-box",\par
+    outline: "none",\par
+  \};\par
+\par
+  const PrimaryBtn = (\{ onClick, disabled, children, style = \{\} \}) => (\par
+    <button\par
+      onClick=\{onClick\}\par
+      disabled=\{disabled\}\par
+      style=\{\{\par
+        background: disabled ? C.border : C.green,\par
+        color: "white",\par
+        border: "none",\par
+        borderRadius: "12px",\par
+        padding: "15px 20px",\par
+        fontSize: "15px",\par
+        cursor: disabled ? "not-allowed" : "pointer",\par
+        width: "100%",\par
+        fontFamily: "inherit",\par
+        fontWeight: "600",\par
+        opacity: disabled ? 0.6 : 1,\par
+        ...style,\par
+      \}\}\par
+    >\par
+      \{children\}\par
+    </button>\par
+  );\par
+\par
+  const StepLabel = (\{ n \}) => (\par
+    <p style=\{\{ color: C.muted, fontSize: "11px", margin: "0 0 6px", letterSpacing: "1px", textTransform: "uppercase" \}\}>\par
+      \{sw ? `Hatua $\{n\} ya 3` : `Step $\{n\} of 3`\}\par
+    </p>\par
+  );\par
+\par
+  // LOADING\par
+  if (step === "loading") return (\par
+    <div style=\{page\}>\par
+      <div style=\{\{ textAlign: "center" \}\}>\par
+        <h2 style=\{\{ color: C.green, fontWeight: "900", fontSize: "28px", letterSpacing: "-1px" \}\}>You Are Great</h2>\par
+        <p style=\{\{ color: C.muted, fontSize: "14px" \}\}>\{sw ? "Inapakia..." : "Loading..."\}</p>\par
+      </div>\par
+    </div>\par
+  );\par
+\par
+  // AUTH SCREEN\par
+  if (step === "auth") return (\par
+    <div style=\{page\}>\par
+      <div style=\{\{ ...card(), padding: "40px 36px" \}\}>\par
+        <LangToggle />\par
+        <div style=\{\{ textAlign: "center", marginBottom: "28px" \}\}>\par
+          <h1 style=\{\{ fontSize: "32px", color: C.green, fontWeight: "900", letterSpacing: "-1px", margin: "0 0 6px" \}\}>\par
+            You Are Great\par
+          </h1>\par
+          <p style=\{\{ color: C.muted, fontSize: "14px", margin: 0 \}\}>\par
+            \{authMode === "signup"\par
+              ? (sw ? "Fungua akaunti yako ya bure" : "Create your free account")\par
+              : (sw ? "Karibu tena" : "Welcome back")\}\par
+          </p>\par
+        </div>\par
+\par
+        <div style=\{\{ marginBottom: "14px" \}\}>\par
+          <p style=\{\{ color: C.muted, fontSize: "12px", margin: "0 0 6px" \}\}>Email</p>\par
+          <input\par
+            type="email"\par
+            placeholder="you@example.com"\par
+            value=\{authEmail\}\par
+            onChange=\{e => setAuthEmail(e.target.value)\}\par
+            style=\{inputStyle\}\par
+          />\par
+        </div>\par
+\par
+        <div style=\{\{ marginBottom: "20px" \}\}>\par
+          <p style=\{\{ color: C.muted, fontSize: "12px", margin: "0 0 6px" \}\}>\par
+            \{sw ? "Nywila" : "Password"\}\par
+          </p>\par
+          <input\par
+            type="password"\par
+            placeholder="\f1\bullet\bullet\bullet\bullet\bullet\bullet\bullet\bullet "\par
+            value=\{authPassword\}\par
+            onChange=\{e => setAuthPassword(e.target.value)\}\par
+            style=\{inputStyle\}\par
+          />\par
+        </div>\par
+\par
+        \{authError && (\par
+          <div style=\{\{ background: "#FEE2E2", borderRadius: "10px", padding: "12px 14px", marginBottom: "16px" \}\}>\par
+            <p style=\{\{ color: "#991B1B", fontSize: "13px", margin: 0 \}\}>\{authError\}</p>\par
+          </div>\par
+        )\}\par
+\par
+        <PrimaryBtn\par
+          onClick=\{authMode === "signup" ? handleSignUp : handleSignIn\}\par
+          disabled=\{authLoading || !authEmail || !authPassword\}\par
+        >\par
+          \{authLoading\par
+            ? (sw ? "Tafadhali subiri..." : "Please wait...")\par
+            : authMode === "signup"\par
+              ? (sw ? "Jiunge Sasa \f2\u8594?\f0 " : "Create Account \f2\u8594?\f0 ")\par
+              : (sw ? "Ingia \f2\u8594?\f0 " : "Sign In \f2\u8594?\f0 ")\}\par
+        </PrimaryBtn>\par
+\par
+        <p style=\{\{ textAlign: "center", color: C.muted, fontSize: "13px", marginTop: "16px", marginBottom: 0 \}\}>\par
+          \{authMode === "signup"\par
+            ? (sw ? "Una akaunti tayari? " : "Already have an account? ")\par
+            : (sw ? "Huna akaunti? " : "Don't have an account? ")\}\par
+          <span\par
+            onClick=\{() => \{ setAuthMode(authMode === "signup" ? "signin" : "signup"); setAuthError(""); \}\}\par
+            style=\{\{ color: C.green, cursor: "pointer", fontWeight: "700" \}\}\par
+          >\par
+            \{authMode === "signup" ? (sw ? "Ingia" : "Sign in") : (sw ? "Jiunge" : "Sign up")\}\par
+          </span>\par
+        </p>\par
+      </div>\par
+    </div>\par
+  );\par
+\par
+  // WELCOME\par
+  if (step === "welcome") return (\par
+    <div style=\{page\}>\par
+      <div style=\{\{ ...card(), padding: "44px 36px", textAlign: "center" \}\}>\par
+        <LangToggle />\par
+        <div style=\{\{\par
+          display: "inline-flex", alignItems: "center", gap: "8px",\par
+          background: C.greenLight, color: C.green,\par
+          fontSize: "11px", fontWeight: "700", letterSpacing: "1px",\par
+          padding: "5px 14px", borderRadius: "20px", marginBottom: "28px",\par
+        \}\}>\par
+          A YOUNGDEV PROGRAM\par
+        </div>\par
+        <h1 style=\{\{ fontSize: "48px", color: C.text, margin: "0 0 4px", fontWeight: "900", letterSpacing: "-2px", lineHeight: 1.0 \}\}>\par
+          You Are\par
+        </h1>\par
+        <h1 style=\{\{ fontSize: "48px", color: C.green, margin: "0 0 20px", fontWeight: "900", letterSpacing: "-2px", lineHeight: 1.0 \}\}>\par
+          Great.\par
+        </h1>\par
+        <p style=\{\{ color: C.muted, fontSize: "16px", margin: "0 0 36px", lineHeight: 1.7 \}\}>\par
+          \{sw ? "Maneno ya nguvu yanayoundwa kwa ajili yako \f1\emdash  kila siku." : "Powerful words built for you \emdash  every single day."\}\par
+        </p>\par
+        <div style=\{\{\par
+          background: C.goldLight, border: `1px solid $\{C.goldBorder\}`,\par
+          borderLeft: `4px solid $\{C.gold\}`, borderRadius: "12px",\par
+          padding: "20px 22px", marginBottom: "32px", textAlign: "left",\par
+        \}\}>\par
+          <p style=\{\{ color: "#5C3D00", fontSize: "15px", lineHeight: 1.75, margin: 0 \}\}>\par
+            \{sw\par
+              ? "Akili yako inaamini unachosema nafsini mwako. Anza kila asubuhi ukijikumbusha ukweli \emdash  wewe una nguvu, una uwezo, na unastahili mafanikio."\par
+              : "Your mind believes what you repeatedly tell it. Start each morning reminding yourself of the truth \emdash  you are capable, you belong, and you are already enough."\}\par
+          </p>\par
+        </div>\par
+        <PrimaryBtn onClick=\{() => setStep("auth")\}>\par
+          \{sw ? "Anza Safari Yako \f2\u8594?\f0 " : "Start Your Journey \f2\u8594?\f0 "\}\par
+        </PrimaryBtn>\par
+        <p style=\{\{ color: C.muted, fontSize: "12px", marginTop: "12px", marginBottom: 0 \}\}>\par
+          \{sw ? "Inachukua dakika 2 tu" : "Takes only 2 minutes"\}\par
+        </p>\par
+      </div>\par
+    </div>\par
+  );\par
+\par
+  // ONBOARD 1\par
+  if (step === "onboard1") return (\par
+    <div style=\{page\}>\par
+      <div style=\{card()\}>\par
+        <LangToggle />\par
+        <ProgressBar />\par
+        <p style=\{\{ color: C.muted, fontSize: "11px", margin: "0 0 6px", letterSpacing: "1px", textTransform: "uppercase" \}\}>\par
+          \{sw ? "Hatua 1 ya 3" : "Step 1 of 3"\}\par
+        </p>\par
+        <h2 style=\{\{ fontSize: "24px", color: C.text, margin: "0 0 6px", fontWeight: "800" \}\}>\par
+          \{sw ? "Jina lako ni nani?" : "What's your name?"\}\par
+        </h2>\par
+        <p style=\{\{ color: C.muted, fontSize: "14px", margin: "0 0 24px", lineHeight: 1.6 \}\}>\par
+          \{sw ? "Maneno yako yataandikwa kwa ajili yako moja kwa moja." : "Your affirmations will speak directly and personally to you."\}\par
+        </p>\par
+        <div style=\{\{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px" \}\}>\par
+          <div>\par
+            <p style=\{\{ color: C.muted, fontSize: "12px", margin: "0 0 6px" \}\}>\{sw ? "Jina lako la kwanza" : "First name"\}</p>\par
+            <input type="text" placeholder=\{sw ? "Jina lako..." : "Your name..."\} value=\{profile.name\} onChange=\{e => setProfile(\{ ...profile, name: e.target.value \})\} style=\{inputStyle\} />\par
+          </div>\par
+          <div>\par
+            <p style=\{\{ color: C.muted, fontSize: "12px", margin: "0 0 6px" \}\}>\{sw ? "Umri wako (18-35)" : "Your age (18-35)"\}</p>\par
+            <input type="number" placeholder=\{sw ? "Umri..." : "Age..."\} min="18" max="35" value=\{profile.age\} onChange=\{e => setProfile(\{ ...profile, age: e.target.value \})\} style=\{inputStyle\} />\par
+          </div>\par
+        </div>\par
+        <PrimaryBtn onClick=\{() => profile.name.trim() && profile.age && setStep("onboard2")\} disabled=\{!profile.name.trim() || !profile.age\}>\par
+          \{sw ? "Endelea \f2\u8594?\f0 " : "Continue \f2\u8594?\f0 "\}\par
+        </PrimaryBtn>\par
+      </div>\par
+    </div>\par
+  );\par
+\par
+  // ONBOARD 2\par
+  if (step === "onboard2") return (\par
+    <div style=\{page\}>\par
+      <div style=\{card()\}>\par
+        <LangToggle />\par
+        <ProgressBar />\par
+        <StepLabel n=\{2\} />\par
+        <h2 style=\{\{ fontSize: "24px", color: C.text, margin: "0 0 6px", fontWeight: "800" \}\}>\par
+          \{sw ? `Unazingatia nini zaidi, $\{profile.name\}?` : `What's weighing on you most, $\{profile.name\}?`\}\par
+        </h2>\par
+        <p style=\{\{ color: C.muted, fontSize: "14px", margin: "0 0 24px", lineHeight: 1.6 \}\}>\par
+          \{sw ? "Chagua moja. Maneno yako yatazingatia eneo hili." : "Pick one. Your affirmations will be rooted in this area of your life."\}\par
+        </p>\par
+        <div style=\{\{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "24px" \}\}>\par
+          \{PILLARS.map(p => \{\par
+            const sel = profile.pillar === p.id;\par
+            return (\par
+              <button key=\{p.id\} onClick=\{() => setProfile(\{ ...profile, pillar: p.id \})\} style=\{\{ background: sel ? p.light : C.bg, border: `2px solid $\{sel ? p.color : C.border\}`, borderRadius: "14px", padding: "16px 18px", cursor: "pointer", textAlign: "left", fontFamily: "inherit", display: "flex", alignItems: "center", gap: "14px" \}\}>\par
+                <div style=\{\{ width: "18px", height: "18px", borderRadius: "50%", flexShrink: 0, border: `2px solid $\{sel ? p.color : C.border\}`, background: sel ? p.color : "transparent", display: "flex", alignItems: "center", justifyContent: "center" \}\}>\par
+                  \{sel && <div style=\{\{ width: "6px", height: "6px", borderRadius: "50%", background: "white" \}\} />\}\par
+                </div>\par
+                <div>\par
+                  <div style=\{\{ color: sel ? p.color : C.text, fontSize: "15px", fontWeight: "700", marginBottom: "2px" \}\}>\{sw ? p.sw : p.en\}</div>\par
+                  <div style=\{\{ color: C.muted, fontSize: "13px" \}\}>\{sw ? p.desc_sw : p.desc_en\}</div>\par
+                </div>\par
+              </button>\par
+            );\par
+          \})\}\par
+        </div>\par
+        <PrimaryBtn onClick=\{() => profile.pillar && setStep("onboard3")\} disabled=\{!profile.pillar\}>\par
+          \{sw ? "Endelea \f2\u8594?\f0 " : "Continue \f2\u8594?\f0 "\}\par
+        </PrimaryBtn>\par
+      </div>\par
+    </div>\par
+  );\par
+\par
+  // ONBOARD 3\par
+  if (step === "onboard3") return (\par
+    <div style=\{page\}>\par
+      <div style=\{card()\}>\par
+        <LangToggle />\par
+        <ProgressBar />\par
+        <StepLabel n=\{3\} />\par
+        <h2 style=\{\{ fontSize: "24px", color: C.text, margin: "0 0 6px", fontWeight: "800" \}\}>\par
+          \{sw ? "Tuambie zaidi kidogo" : "Tell us a little more"\}\par
+        </h2>\par
+        <p style=\{\{ color: C.muted, fontSize: "14px", margin: "0 0 6px", lineHeight: 1.6 \}\}>\par
+          \{sw ? "Hii ndiyo sehemu muhimu zaidi. Unaandika kwa ajili yako mwenyewe." : "This is the most important part. You're writing this for yourself."\}\par
+        </p>\par
+        <p style=\{\{ color: C.muted, fontSize: "13px", margin: "0 0 20px", lineHeight: 1.6, fontStyle: "italic" \}\}>\par
+          \{sw ? "Unakabiliwa na nini sasa hivi? Unajisikiaje?" : "What are you dealing with right now? How are you feeling?"\}\par
+        </p>\par
+        <textarea\par
+          placeholder=\{sw ? "k.m. Nimekuwa nikitafuta kazi kwa miezi 6, ninahisi wasiwasi sana..." : "e.g. I've been job hunting for 6 months, I feel anxious about the future..."\}\par
+          value=\{profile.situation\}\par
+          onChange=\{e => setProfile(\{ ...profile, situation: e.target.value \})\}\par
+          rows=\{5\}\par
+          style=\{\{ ...inputStyle, resize: "none", lineHeight: 1.7, marginBottom: "20px" \}\}\par
+        />\par
+        <PrimaryBtn onClick=\{() => setStep("plan")\}>\par
+          \{sw ? "Endelea \f2\u8594?\f0 " : "Continue \f2\u8594?\f0 "\}\par
+        </PrimaryBtn>\par
+      </div>\par
+    </div>\par
+  );\par
+\par
+  // PLAN\par
+  if (step === "plan") return (\par
+    <div style=\{page\}>\par
+      <div style=\{\{ ...card(520) \}\}>\par
+        <LangToggle />\par
+        <div style=\{\{ textAlign: "center", marginBottom: "28px" \}\}>\par
+          <h2 style=\{\{ fontSize: "26px", color: C.text, margin: "0 0 6px", fontWeight: "800" \}\}>\par
+            \{sw ? "Chagua Mpango Wako" : "Choose Your Plan"\}\par
+          </h2>\par
+          <p style=\{\{ color: C.muted, fontSize: "14px", margin: 0 \}\}>\par
+            \{sw ? "Anza bila malipo. Panda ngazi ukiwa tayari." : "Start free. Upgrade when you're ready."\}\par
+          </p>\par
+        </div>\par
+        <div style=\{\{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" \}\}>\par
+          <div style=\{\{ border: `1.5px solid $\{C.border\}`, borderRadius: "16px", padding: "22px" \}\}>\par
+            <p style=\{\{ color: C.muted, fontSize: "10px", letterSpacing: "1.5px", fontWeight: "700", margin: "0 0 6px" \}\}>\{sw ? "BURE" : "FREE"\}</p>\par
+            <p style=\{\{ fontSize: "28px", color: C.text, margin: "0 0 2px", fontWeight: "900" \}\}>Ksh 0</p>\par
+            <p style=\{\{ color: C.muted, fontSize: "12px", margin: "0 0 16px" \}\}>\{sw ? "milele" : "forever"\}</p>\par
+            <div style=\{\{ borderTop: `1px solid $\{C.border\}`, paddingTop: "12px", marginBottom: "16px" \}\}>\par
+              \{(sw ? ["Maneno mazuri ya kila siku", "Kiingereza au Kiswahili", "Bila malipo milele"] : ["Daily uplifting affirmations", "English or Kiswahili", "Always free"]).map(f => (\par
+                <div key=\{f\} style=\{\{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "flex-start" \}\}>\par
+                  <span style=\{\{ color: C.green, fontSize: "12px", marginTop: "2px", flexShrink: 0 \}\}>\f3\u10003?\f0 </span>\par
+                  <span style=\{\{ color: C.muted, fontSize: "13px" \}\}>\{f\}</span>\par
+                </div>\par
+              ))\}\par
+              \{(sw ? ["Maneno ya kibinafsi kwako", "Kulingana na hali yako"] : ["Personalized to you", "Based on your real situation"]).map(f => (\par
+                <div key=\{f\} style=\{\{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "flex-start" \}\}>\par
+                  <span style=\{\{ color: C.border, fontSize: "12px", marginTop: "2px", flexShrink: 0 \}\}>\f1\emdash </span>\par
+                  <span style=\{\{ color: C.border, fontSize: "13px" \}\}>\{f\}</span>\par
+                </div>\par
+              ))\}\par
+            </div>\par
+            <button\par
+              onClick=\{async () => \{ setIsPremium(false); const \{ data: \{ user: u \} \} = await supabase.auth.getUser(); if (u) await saveProfile(u.id, profile, false); setStep("home"); \}\}\par
+              style=\{\{ border: `1.5px solid $\{C.border\}`, background: "transparent", borderRadius: "10px", padding: "12px", width: "100%", cursor: "pointer", fontFamily: "inherit", fontSize: "14px", color: C.muted, fontWeight: "600" \}\}\par
+            >\par
+              \{sw ? "Anza Bure" : "Start Free"\}\par
+            </button>\par
+          </div>\par
+          <div style=\{\{ border: `2px solid $\{C.green\}`, borderRadius: "16px", padding: "22px", background: C.greenLight, position: "relative" \}\}>\par
+            <div style=\{\{ position: "absolute", top: "-12px", left: "50%", transform: "translateX(-50%)", background: C.green, color: "white", fontSize: "10px", fontWeight: "700", letterSpacing: "1px", padding: "4px 14px", borderRadius: "20px", whiteSpace: "nowrap" \}\}>\par
+              \{sw ? "MAARUFU ZAIDI" : "MOST POPULAR"\}\par
+            </div>\par
+            <p style=\{\{ color: C.green, fontSize: "10px", letterSpacing: "1.5px", fontWeight: "700", margin: "0 0 6px" \}\}>PREMIUM</p>\par
+            <p style=\{\{ fontSize: "28px", color: C.text, margin: "0 0 2px", fontWeight: "900" \}\}>Ksh 200</p>\par
+            <p style=\{\{ color: C.muted, fontSize: "12px", margin: "0 0 16px" \}\}>\{sw ? "/mwezi" : "/month"\}</p>\par
+            <div style=\{\{ borderTop: `1px solid $\{C.greenBorder\}`, paddingTop: "12px", marginBottom: "16px" \}\}>\par
+              \{(sw ? ["Maneno mazuri ya kila siku", "Kiingereza au Kiswahili", "Maneno ya kibinafsi kwako", "Kulingana na hali yako", "Malipo kupitia M-Pesa"] : ["Daily uplifting affirmations", "English or Kiswahili", "Personalized to your life", "Based on your real situation", "Pay easily via M-Pesa"]).map(f => (\par
+                <div key=\{f\} style=\{\{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "flex-start" \}\}>\par
+                  <span style=\{\{ color: C.green, fontSize: "12px", marginTop: "2px", flexShrink: 0 \}\}>\f3\u10003?\f0 </span>\par
+                  <span style=\{\{ color: C.muted, fontSize: "13px" \}\}>\{f\}</span>\par
+                </div>\par
+              ))\}\par
+            </div>\par
+            <button\par
+              onClick=\{async () => \{ setIsPremium(true); const \{ data: \{ user: u \} \} = await supabase.auth.getUser(); if (u) await saveProfile(u.id, profile, true); setStep("home"); \}\}\par
+              style=\{\{ background: C.green, border: "none", borderRadius: "10px", padding: "12px", width: "100%", cursor: "pointer", fontFamily: "inherit", fontSize: "14px", color: "white", fontWeight: "600" \}\}\par
+            >\par
+              \{sw ? "Anza Premium" : "Start Premium"\}\par
+            </button>\par
+          </div>\par
+        </div>\par
+        <div style=\{\{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", color: C.muted, fontSize: "13px" \}\}>\par
+          <span>\f4\u-10179?\u-8975?\f0 </span>\par
+          <span>\{sw ? "Malipo kupitia M-Pesa \f1\emdash  Ksh 200 tu kwa mwezi" : "Pay via M-Pesa \emdash  just Ksh 200 a month"\}</span>\par
+        </div>\par
+      </div>\par
+    </div>\par
+  );\par
+\par
+  // HOME\par
+  const hour = new Date().getHours();\par
+  const greeting = hour < 12 ? (sw ? "Habari ya asubuhi" : "Good morning") : hour < 17 ? (sw ? "Habari ya mchana" : "Good afternoon") : (sw ? "Habari ya jioni" : "Good evening");\par
+  const today = new Date().toLocaleDateString(sw ? "sw-KE" : "en-KE", \{ weekday: "long", month: "long", day: "numeric" \});\par
+  const activePillar = PILLARS.find(p => p.id === profile.pillar);\par
+\par
+  return (\par
+    <div style=\{page\}>\par
+      <div style=\{\{ ...card(500) \}\}>\par
+        <div style=\{\{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" \}\}>\par
+          <div>\par
+            <div style=\{\{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" \}\}>\par
+              <span style=\{\{ fontWeight: "900", fontSize: "18px", color: C.green, letterSpacing: "-0.5px" \}\}>You Are Great</span>\par
+            </div>\par
+            <p style=\{\{ margin: 0, color: C.text, fontSize: "14px", fontWeight: "600" \}\}>\{greeting\}, \{profile.name\} \f4\u-10179?\u-9141?\f0 </p>\par
+            <p style=\{\{ margin: "2px 0 0", color: C.muted, fontSize: "12px" \}\}>\{today\}</p>\par
+          </div>\par
+          <div style=\{\{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" \}\}>\par
+            <div style=\{\{ background: isPremium ? C.green : C.border, color: "white", padding: "4px 10px", borderRadius: "20px", fontSize: "10px", fontWeight: "700", letterSpacing: "1px" \}\}>\par
+              \{isPremium ? "PREMIUM" : sw ? "BURE" : "FREE"\}\par
+            </div>\par
+            <LangToggle right />\par
+          </div>\par
+        </div>\par
+\par
+        <div style=\{\{ display: "flex", gap: "10px", marginBottom: "20px" \}\}>\par
+          <div style=\{\{ flex: 1, background: C.goldLight, border: `1px solid $\{C.goldBorder\}`, borderRadius: "12px", padding: "12px 14px", display: "flex", alignItems: "center", gap: "8px" \}\}>\par
+            <span style=\{\{ fontSize: "18px" \}\}>\f4\u-10179?\u-8923?\f0 </span>\par
+            <div>\par
+              <span style=\{\{ color: "#7A4A00", fontSize: "15px", fontWeight: "700" \}\}>\{streak\}</span>\par
+              <span style=\{\{ color: "#7A4A00", fontSize: "13px" \}\}>\{sw ? " siku mfululizo" : "-day streak"\}</span>\par
+            </div>\par
+          </div>\par
+          \{activePillar && (\par
+            <div style=\{\{ flex: 1, background: activePillar.light, border: `1px solid $\{activePillar.color\}30`, borderRadius: "12px", padding: "12px 14px", display: "flex", alignItems: "center" \}\}>\par
+              <span style=\{\{ color: activePillar.color, fontSize: "13px", fontWeight: "700" \}\}>\{sw ? activePillar.sw : activePillar.en\}</span>\par
+            </div>\par
+          )\}\par
+        </div>\par
+\par
+        <div style=\{\{ background: isPremium ? "#F0FAF4" : C.bg, border: `2px solid $\{isPremium ? C.greenMid : C.border\}`, borderRadius: "18px", padding: "30px 28px", marginBottom: "16px", minHeight: "170px", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative" \}\}>\par
+          \{isPremium && <span style=\{\{ position: "absolute", top: "14px", right: "16px", color: C.greenMid, fontSize: "11px", fontWeight: "600" \}\}>\{sw ? "\f3\u10022?\f0  imeandikwa kwa ajili yako" : "\f3\u10022?\f0  written for you"\}</span>\}\par
+          \{loading ? (\par
+            <p style=\{\{ textAlign: "center", color: C.muted, fontSize: "15px", margin: 0, fontStyle: "italic" \}\}>\par
+              \{sw ? "Inaandika maneno yako..." : "Writing your affirmation..."\}\par
+            </p>\par
+          ) : (\par
+            <p style=\{\{ fontSize: "19px", lineHeight: 1.8, color: C.text, margin: 0, fontStyle: "italic" \}\}>"\{affirmation\}"</p>\par
+          )\}\par
+        </div>\par
+\par
+        <div style=\{\{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "16px" \}\}>\par
+          <button onClick=\{() => fetchAffirmation()\} disabled=\{loading\} style=\{\{ border: `1.5px solid $\{C.border\}`, background: "transparent", borderRadius: "10px", padding: "13px", cursor: "pointer", fontFamily: "inherit", fontSize: "14px", color: C.muted, fontWeight: "600", opacity: loading ? 0.5 : 1 \}\}>\par
+            \{sw ? "\f2\u8635?\f0  Maneno Mapya" : "\f2\u8635?\f0  New affirmation"\}\par
+          </button>\par
+          <button onClick=\{() => setSaved(s => !s)\} style=\{\{ background: saved ? C.greenLight : C.green, border: saved ? `1.5px solid $\{C.green\}` : "none", borderRadius: "10px", padding: "13px", cursor: "pointer", fontFamily: "inherit", fontSize: "14px", color: saved ? C.green : "white", fontWeight: "600" \}\}>\par
+            \{saved ? (sw ? "\f3\u10003?\f0  Imehifadhiwa" : "\f3\u10003?\f0  Saved") : (sw ? "Hifadhi" : "Save")\}\par
+          </button>\par
+        </div>\par
+\par
+        \{!isPremium && (\par
+          <div style=\{\{ background: C.greenLight, border: `1px solid $\{C.greenBorder\}`, borderRadius: "14px", padding: "14px 16px", display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" \}\}>\par
+            <span style=\{\{ fontSize: "20px", flexShrink: 0 \}\}>\f3\u10022?\f0 </span>\par
+            <div style=\{\{ flex: 1 \}\}>\par
+              <p style=\{\{ margin: "0 0 2px", fontSize: "14px", color: C.green, fontWeight: "700" \}\}>\{sw ? "Pata maneno ya kibinafsi" : "Get affirmations made for you"\}</p>\par
+              <p style=\{\{ margin: 0, fontSize: "12px", color: C.muted \}\}>\{sw ? "Ksh 200/mwezi kupitia M-Pesa" : "Ksh 200/month via M-Pesa"\}</p>\par
+            </div>\par
+            <button onClick=\{async () => \{ setIsPremium(true); const \{ data: \{ user: u \} \} = await supabase.auth.getUser(); if (u) await saveProfile(u.id, profile, true); fetchAffirmation(true); \}\} style=\{\{ background: C.green, color: "white", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", fontWeight: "600", whiteSpace: "nowrap" \}\}>\par
+              \{sw ? "Panda Ngazi" : "Upgrade"\}\par
+            </button>\par
+          </div>\par
+        )\}\par
+\par
+        <div style=\{\{ textAlign: "center", paddingTop: "14px", borderTop: `1px solid $\{C.border\}`, display: "flex", alignItems: "center", justifyContent: "center", gap: "16px" \}\}>\par
+          <p style=\{\{ margin: 0, color: C.muted, fontSize: "12px" \}\}>\par
+            \{sw ? "Programu ya " : "A program by "\}\par
+            <strong style=\{\{ color: C.green \}\}>YoungDev</strong>\par
+          </p>\par
+          <button onClick=\{handleSignOut\} style=\{\{ background: "transparent", border: "none", color: C.muted, fontSize: "12px", cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" \}\}>\par
+            \{sw ? "Toka" : "Sign out"\}\par
+          </button>\par
+        </div>\par
+      </div>\par
+    </div>\par
+  );\par
+\}\lang9\par
+}
+ 

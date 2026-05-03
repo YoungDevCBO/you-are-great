@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { supabase } from "./supabase";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 
@@ -47,22 +48,22 @@ const C = {
   border: "#D6E2DA",
 };
 
-async function makeAffirmation(profile, isPremium, lang) {
+async function makeAffirmation(profile, lang) {
   const sw = lang === "sw";
   const pillar = PILLARS.find(p => p.id === profile.pillar);
   const pillarLabel = pillar ? (sw ? pillar.sw : pillar.en) : "personal growth";
 
   const system = sw
-    ? "Wewe ni rafiki wa karibu na mwenye hekima — si daktari, si mshauri rasmi — rafiki anayekujua na anayekupenda. Andika maneno ya kutia moyo kwa Kiswahili safi cha Kenya. Maneno ya sasa, ya moja kwa moja. Sentensi 2 hadi 3 tu. Usiandike alama za nukuu wala utangulizi."
-    : "You are a warm, wise friend — not a therapist, not a corporate coach — a friend who knows this person and believes in them. Write affirmations in direct, grounded English. Present tense. 2 to 3 sentences only. No quote marks, no preamble, just the words.";
+    ? "Wewe ni rafiki wa karibu na mwenye hekima. Andika maneno ya kutia moyo kwa Kiswahili safi cha Kenya. Maneno ya sasa, ya moja kwa moja. Sentensi 2 hadi 3 tu. Usiandike alama za nukuu wala utangulizi."
+    : "You are a warm, wise friend. Write affirmations in direct, grounded English. Present tense. 2 to 3 sentences only. No quote marks, no preamble, just the words.";
 
-  const user = isPremium && profile.name
+  const user = profile.name
     ? sw
-      ? `Andika maneno ya kutia moyo ya kibinafsi kabisa kwa ${profile.name}, kijana wa Kenya mwenye umri wa miaka ${profile.age}. Wanajishughulisha na: ${pillarLabel}. Hali yao ya sasa: "${profile.situation || "wanajaribu kupata njia yao maishani"}". Yafanye yaonekane yameandikwa kwa ajili yao peke yao — si kwa mtu yeyote mwingine.`
+      ? `Andika maneno ya kutia moyo ya kibinafsi kabisa kwa ${profile.name}, kijana wa Kenya mwenye umri wa miaka ${profile.age}. Wanajishughulisha na: ${pillarLabel}. Hali yao ya sasa: "${profile.situation || "wanajaribu kupata njia yao maishani"}". Yafanye yaonekane yameandikwa kwa ajili yao peke yao.`
       : `Write a deeply personal affirmation for ${profile.name}, a ${profile.age}-year-old young Kenyan focused on ${pillarLabel}. Their current situation: "${profile.situation || "finding their footing in life"}". Make it feel like it was written for them and no one else.`
     : sw
-      ? "Andika maneno mazuri ya kutia moyo kwa kijana yeyote wa Kenya kati ya miaka 18 na 35 anayejaribu kufanikiwa. Maneno ya nguvu, ya kweli, ya sasa."
-      : "Write a powerful, grounded daily affirmation for any young Kenyan aged 18–35 navigating life's challenges. Warm, real, and present-tense.";
+      ? "Andika maneno mazuri ya kutia moyo kwa kijana yeyote wa Kenya kati ya miaka 18 na 35 anayejaribu kufanikiwa."
+      : "Write a powerful, grounded daily affirmation for any young Kenyan aged 18-35 navigating life's challenges.";
 
   const res = await fetch(API_URL, {
     method: "POST",
@@ -78,29 +79,119 @@ async function makeAffirmation(profile, isPremium, lang) {
   return (
     data.content?.[0]?.text ??
     (sw
-      ? "Wewe una nguvu zaidi kuliko unavyofikiri. Leo unachukua hatua moja mbele — na hiyo inatosha."
-      : "You are more capable than you know. Today, one step forward is enough — and you can take it.")
+      ? "Wewe una nguvu zaidi kuliko unavyofikiri. Leo unachukua hatua moja mbele."
+      : "You are more capable than you know. Today, one step forward is enough.")
   );
 }
 
 export default function App() {
-  const [step, setStep] = useState("welcome");
+  const [step, setStep] = useState("loading");
   const [lang, setLang] = useState("en");
   const [profile, setProfile] = useState({ name: "", age: "", pillar: "", situation: "" });
-  const [isPremium, setIsPremium] = useState(false);
   const [affirmation, setAffirmation] = useState("");
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [streak] = useState(4);
+  const [authMode, setAuthMode] = useState("signup");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
 
   const sw = lang === "sw";
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        loadProfile(session.user.id);
+      } else {
+        setStep("welcome");
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) {
+        setStep("welcome");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const loadProfile = async (userId) => {
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .single();
+
+    if (data) {
+      setProfile({
+        name: data.name || "",
+        age: data.age || "",
+        pillar: data.pillar || "",
+        situation: data.situation || "",
+      });
+      setStep("home");
+    } else {
+      setStep("onboard1");
+    }
+  };
+
+  const saveProfile = async (userId, profileData) => {
+    await supabase.from("profiles").upsert({
+      id: userId,
+      name: profileData.name,
+      age: profileData.age,
+      pillar: profileData.pillar,
+      situation: profileData.situation,
+      is_premium: true,
+    });
+  };
+
+  const handleSignUp = async () => {
+    setAuthLoading(true);
+    setAuthError("");
+    const { error } = await supabase.auth.signUp({
+      email: authEmail,
+      password: authPassword,
+    });
+    if (error) {
+      setAuthError(error.message);
+    } else {
+      setStep("onboard1");
+    }
+    setAuthLoading(false);
+  };
+
+  const handleSignIn = async () => {
+    setAuthLoading(true);
+    setAuthError("");
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: authEmail,
+      password: authPassword,
+    });
+    if (error) {
+      setAuthError(error.message);
+    } else {
+      await loadProfile(data.user.id);
+    }
+    setAuthLoading(false);
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setProfile({ name: "", age: "", pillar: "", situation: "" });
+    setAffirmation("");
+    setStep("welcome");
+  };
+
   const fetchAffirmation = useCallback(
-    async (prem = isPremium, language = lang) => {
+    async (language = lang) => {
       setLoading(true);
       setSaved(false);
       try {
-        const text = await makeAffirmation(profile, prem, language);
+        const text = await makeAffirmation(profile, language);
         setAffirmation(text);
       } catch {
         setAffirmation(
@@ -111,7 +202,7 @@ export default function App() {
       }
       setLoading(false);
     },
-    [profile, isPremium, lang]
+    [profile, lang]
   );
 
   useEffect(() => {
@@ -146,7 +237,7 @@ export default function App() {
           key={l}
           onClick={() => {
             setLang(l);
-            if (step === "home") fetchAffirmation(isPremium, l);
+            if (step === "home") fetchAffirmation(l);
           }}
           style={{
             padding: "4px 12px",
@@ -168,21 +259,12 @@ export default function App() {
   );
 
   const ProgressBar = () => {
-    const steps = ["onboard1", "onboard2", "onboard3", "plan"];
+    const steps = ["onboard1", "onboard2", "onboard3"];
     const idx = steps.indexOf(step);
     return (
       <div style={{ display: "flex", gap: "5px", marginBottom: "18px" }}>
         {steps.map((_, i) => (
-          <div
-            key={i}
-            style={{
-              height: "3px",
-              flex: 1,
-              borderRadius: "2px",
-              background: i <= idx ? C.green : C.border,
-              transition: "background 0.3s",
-            }}
-          />
+          <div key={i} style={{ height: "3px", flex: 1, borderRadius: "2px", background: i <= idx ? C.green : C.border }} />
         ))}
       </div>
     );
@@ -201,7 +283,7 @@ export default function App() {
     outline: "none",
   };
 
-  const PrimaryBtn = ({ onClick, disabled, children, style = {} }) => (
+  const PrimaryBtn = ({ onClick, disabled, children }) => (
     <button
       onClick={onClick}
       disabled={disabled}
@@ -217,555 +299,301 @@ export default function App() {
         fontFamily: "inherit",
         fontWeight: "600",
         opacity: disabled ? 0.6 : 1,
-        letterSpacing: "0.2px",
-        ...style,
       }}
     >
       {children}
     </button>
   );
 
-  const StepLabel = ({ n }) => (
-    <p style={{ color: C.muted, fontSize: "11px", margin: "0 0 6px", letterSpacing: "1px", textTransform: "uppercase" }}>
-      {sw ? `Hatua ${n} ya 3` : `Step ${n} of 3`}
-    </p>
+  // LOADING
+  if (step === "loading") return (
+    <div style={page}>
+      <div style={{ textAlign: "center" }}>
+        <h2 style={{ color: C.green, fontWeight: "900", fontSize: "28px", letterSpacing: "-1px" }}>You Are Great</h2>
+        <p style={{ color: C.muted, fontSize: "14px" }}>{sw ? "Inapakia..." : "Loading..."}</p>
+      </div>
+    </div>
   );
 
-  // ── WELCOME ──────────────────────────────────────────────────────────
-  if (step === "welcome")
-    return (
-      <div style={page}>
-        <div style={{ ...card(), padding: "44px 36px", textAlign: "center" }}>
-          <LangToggle />
-
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: "8px",
-            background: C.greenLight, color: C.green,
-            fontSize: "11px", fontWeight: "700", letterSpacing: "1px",
-            padding: "5px 14px", borderRadius: "20px", marginBottom: "28px",
-          }}>
-            A YOUNGDEV PROGRAM
-          </div>
-
-          <h1 style={{
-            fontSize: "48px", color: C.text, margin: "0 0 4px",
-            fontWeight: "900", letterSpacing: "-2px", lineHeight: 1.0,
-          }}>
-            You Are
+  // AUTH
+  if (step === "auth") return (
+    <div style={page}>
+      <div style={{ ...card(), padding: "40px 36px" }}>
+        <LangToggle />
+        <div style={{ textAlign: "center", marginBottom: "28px" }}>
+          <h1 style={{ fontSize: "32px", color: C.green, fontWeight: "900", letterSpacing: "-1px", margin: "0 0 6px" }}>
+            You Are Great
           </h1>
-          <h1 style={{
-            fontSize: "48px", color: C.green, margin: "0 0 20px",
-            fontWeight: "900", letterSpacing: "-2px", lineHeight: 1.0,
-          }}>
-            Great.
-          </h1>
-
-          <p style={{ color: C.muted, fontSize: "16px", margin: "0 0 36px", lineHeight: 1.7 }}>
-            {sw
-              ? "Maneno ya nguvu yanayoundwa kwa ajili yako — kila siku."
-              : "Powerful words built for you — every single day."}
-          </p>
-
-          <div style={{
-            background: C.goldLight,
-            border: `1px solid ${C.goldBorder}`,
-            borderLeft: `4px solid ${C.gold}`,
-            borderRadius: "12px",
-            padding: "20px 22px",
-            marginBottom: "32px",
-            textAlign: "left",
-          }}>
-            <p style={{ color: C.gold, fontSize: "11px", fontWeight: "700", letterSpacing: "1px", margin: "0 0 8px" }}>
-              {sw ? "KWA NINI INAFANYA KAZI" : "WHY IT WORKS"}
-            </p>
-            <p style={{ color: "#5C3D00", fontSize: "15px", lineHeight: 1.75, margin: 0 }}>
-              {sw
-                ? "Akili yako inaamini unachosema nafsini mwako. Anza kila asubuhi ukijikumbusha ukweli — wewe una nguvu, una uwezo, na unastahili mafanikio."
-                : "Your mind believes what you repeatedly tell it. Start each morning reminding yourself of the truth — you are capable, you belong, and you are already enough."}
-            </p>
-          </div>
-
-          <PrimaryBtn onClick={() => setStep("onboard1")}>
-            {sw ? "Anza Safari Yako →" : "Start Your Journey →"}
-          </PrimaryBtn>
-          <p style={{ color: C.muted, fontSize: "12px", marginTop: "12px", marginBottom: 0 }}>
-            {sw ? "Inachukua dakika 2 tu" : "Takes only 2 minutes"}
+          <p style={{ color: C.muted, fontSize: "14px", margin: 0 }}>
+            {authMode === "signup"
+              ? (sw ? "Fungua akaunti yako ya bure" : "Create your free account")
+              : (sw ? "Karibu tena" : "Welcome back")}
           </p>
         </div>
-      </div>
-    );
 
-  // ── ONBOARD 1: Name + Age ────────────────────────────────────────────
-  if (step === "onboard1")
-    return (
-      <div style={page}>
-        <div style={card()}>
-          <LangToggle />
-          <ProgressBar />
-          <StepLabel n={1} />
-          <h2 style={{ fontSize: "24px", color: C.text, margin: "0 0 6px", fontWeight: "800" }}>
-            {sw ? "Jina lako ni nani?" : "What's your name?"}
-          </h2>
-          <p style={{ color: C.muted, fontSize: "14px", margin: "0 0 24px", lineHeight: 1.6 }}>
-            {sw
-              ? "Maneno yako yataandikwa kwa ajili yako moja kwa moja."
-              : "Your affirmations will speak directly and personally to you."}
-          </p>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px" }}>
-            <div>
-              <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>
-                {sw ? "Jina lako la kwanza" : "First name"}
-              </p>
-              <input
-                type="text"
-                placeholder={sw ? "Jina lako..." : "Your name..."}
-                value={profile.name}
-                onChange={e => setProfile({ ...profile, name: e.target.value })}
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>
-                {sw ? "Umri wako (18–35)" : "Your age (18–35)"}
-              </p>
-              <input
-                type="number"
-                placeholder={sw ? "Umri..." : "Age..."}
-                min="18"
-                max="35"
-                value={profile.age}
-                onChange={e => setProfile({ ...profile, age: e.target.value })}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-
-          <PrimaryBtn
-            onClick={() => profile.name.trim() && profile.age && setStep("onboard2")}
-            disabled={!profile.name.trim() || !profile.age}
-          >
-            {sw ? "Endelea →" : "Continue →"}
-          </PrimaryBtn>
-        </div>
-      </div>
-    );
-
-  // ── ONBOARD 2: Pillar ────────────────────────────────────────────────
-  if (step === "onboard2")
-    return (
-      <div style={page}>
-        <div style={card()}>
-          <LangToggle />
-          <ProgressBar />
-          <StepLabel n={2} />
-          <h2 style={{ fontSize: "24px", color: C.text, margin: "0 0 6px", fontWeight: "800" }}>
-            {sw
-              ? `Unazingatia nini zaidi, ${profile.name}?`
-              : `What's weighing on you most, ${profile.name}?`}
-          </h2>
-          <p style={{ color: C.muted, fontSize: "14px", margin: "0 0 24px", lineHeight: 1.6 }}>
-            {sw
-              ? "Chagua moja. Maneno yako yatazingatia eneo hili."
-              : "Pick one. Your affirmations will be rooted in this area of your life."}
-          </p>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "24px" }}>
-            {PILLARS.map(p => {
-              const sel = profile.pillar === p.id;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => setProfile({ ...profile, pillar: p.id })}
-                  style={{
-                    background: sel ? p.light : C.bg,
-                    border: `2px solid ${sel ? p.color : C.border}`,
-                    borderRadius: "14px",
-                    padding: "16px 18px",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    fontFamily: "inherit",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    transition: "border-color 0.15s, background 0.15s",
-                  }}
-                >
-                  <div style={{
-                    width: "18px", height: "18px", borderRadius: "50%", flexShrink: 0,
-                    border: `2px solid ${sel ? p.color : C.border}`,
-                    background: sel ? p.color : "transparent",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    {sel && <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "white" }} />}
-                  </div>
-                  <div>
-                    <div style={{ color: sel ? p.color : C.text, fontSize: "15px", fontWeight: "700", marginBottom: "2px" }}>
-                      {sw ? p.sw : p.en}
-                    </div>
-                    <div style={{ color: C.muted, fontSize: "13px" }}>
-                      {sw ? p.desc_sw : p.desc_en}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <PrimaryBtn
-            onClick={() => profile.pillar && setStep("onboard3")}
-            disabled={!profile.pillar}
-          >
-            {sw ? "Endelea →" : "Continue →"}
-          </PrimaryBtn>
-        </div>
-      </div>
-    );
-
-  // ── ONBOARD 3: Situation ─────────────────────────────────────────────
-  if (step === "onboard3")
-    return (
-      <div style={page}>
-        <div style={card()}>
-          <LangToggle />
-          <ProgressBar />
-          <StepLabel n={3} />
-          <h2 style={{ fontSize: "24px", color: C.text, margin: "0 0 6px", fontWeight: "800" }}>
-            {sw ? "Tuambie zaidi kidogo" : "Tell us a little more"}
-          </h2>
-          <p style={{ color: C.muted, fontSize: "14px", margin: "0 0 6px", lineHeight: 1.6 }}>
-            {sw
-              ? "Hii ndiyo sehemu muhimu zaidi. Unaandika kwa ajili yako mwenyewe — hakuna mtu mwingine atakayesoma hili."
-              : "This is the most important part. You're writing this for yourself — no one else will read it."}
-          </p>
-          <p style={{ color: C.muted, fontSize: "13px", margin: "0 0 20px", lineHeight: 1.6, fontStyle: "italic" }}>
-            {sw
-              ? "Unakabiliwa na nini sasa hivi? Unajisikiaje? Unataka nini kibadilike?"
-              : "What are you dealing with right now? How are you feeling? What do you want to change?"}
-          </p>
-          <textarea
-            placeholder={
-              sw
-                ? "k.m. Nimekuwa nikitafuta kazi kwa miezi 6, ninahisi wasiwasi sana, ninaanza biashara ndogo ndogo..."
-                : "e.g. I've been job hunting for 6 months, I feel anxious about the future, I'm trying to start a small business..."
-            }
-            value={profile.situation}
-            onChange={e => setProfile({ ...profile, situation: e.target.value })}
-            rows={5}
-            style={{ ...inputStyle, resize: "none", lineHeight: 1.7, marginBottom: "20px" }}
+        <div style={{ marginBottom: "14px" }}>
+          <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>Email</p>
+          <input
+            type="email"
+            placeholder="you@example.com"
+            value={authEmail}
+            onChange={e => setAuthEmail(e.target.value)}
+            style={inputStyle}
           />
-          <PrimaryBtn onClick={() => setStep("plan")}>
-            {sw ? "Endelea →" : "Continue →"}
-          </PrimaryBtn>
         </div>
+
+        <div style={{ marginBottom: "20px" }}>
+          <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>{sw ? "Nywila" : "Password"}</p>
+          <input
+            type="password"
+            placeholder="••••••••"
+            value={authPassword}
+            onChange={e => setAuthPassword(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+
+        {authError && (
+          <div style={{ background: "#FEE2E2", borderRadius: "10px", padding: "12px 14px", marginBottom: "16px" }}>
+            <p style={{ color: "#991B1B", fontSize: "13px", margin: 0 }}>{authError}</p>
+          </div>
+        )}
+
+        <PrimaryBtn
+          onClick={authMode === "signup" ? handleSignUp : handleSignIn}
+          disabled={authLoading || !authEmail || !authPassword}
+        >
+          {authLoading
+            ? (sw ? "Tafadhali subiri..." : "Please wait...")
+            : authMode === "signup"
+              ? (sw ? "Jiunge Sasa →" : "Create Account →")
+              : (sw ? "Ingia →" : "Sign In →")}
+        </PrimaryBtn>
+
+        <p style={{ textAlign: "center", color: C.muted, fontSize: "13px", marginTop: "16px", marginBottom: 0 }}>
+          {authMode === "signup"
+            ? (sw ? "Una akaunti tayari? " : "Already have an account? ")
+            : (sw ? "Huna akaunti? " : "Don't have an account? ")}
+          <span
+            onClick={() => { setAuthMode(authMode === "signup" ? "signin" : "signup"); setAuthError(""); }}
+            style={{ color: C.green, cursor: "pointer", fontWeight: "700" }}
+          >
+            {authMode === "signup" ? (sw ? "Ingia" : "Sign in") : (sw ? "Jiunge" : "Sign up")}
+          </span>
+        </p>
       </div>
-    );
+    </div>
+  );
 
-  // ── PLAN ─────────────────────────────────────────────────────────────
-  if (step === "plan")
-    return (
-      <div style={page}>
-        <div style={{ ...card(520) }}>
-          <LangToggle />
-          <div style={{ textAlign: "center", marginBottom: "28px" }}>
-            <h2 style={{ fontSize: "26px", color: C.text, margin: "0 0 6px", fontWeight: "800" }}>
-              {sw ? "Chagua Mpango Wako" : "Choose Your Plan"}
-            </h2>
-            <p style={{ color: C.muted, fontSize: "14px", margin: 0 }}>
-              {sw
-                ? "Anza bila malipo. Panda ngazi ukiwa tayari."
-                : "Start free. Upgrade when you're ready."}
-            </p>
+  // WELCOME
+  if (step === "welcome") return (
+    <div style={page}>
+      <div style={{ ...card(), padding: "44px 36px", textAlign: "center" }}>
+        <LangToggle />
+        <div style={{
+          display: "inline-flex", alignItems: "center",
+          background: C.greenLight, color: C.green,
+          fontSize: "11px", fontWeight: "700", letterSpacing: "1px",
+          padding: "5px 14px", borderRadius: "20px", marginBottom: "28px",
+        }}>
+          A YOUNGDEV PROGRAM
+        </div>
+        <h1 style={{ fontSize: "48px", color: C.text, margin: "0 0 4px", fontWeight: "900", letterSpacing: "-2px", lineHeight: 1.0 }}>
+          You Are
+        </h1>
+        <h1 style={{ fontSize: "48px", color: C.green, margin: "0 0 20px", fontWeight: "900", letterSpacing: "-2px", lineHeight: 1.0 }}>
+          Great.
+        </h1>
+        <p style={{ color: C.muted, fontSize: "16px", margin: "0 0 36px", lineHeight: 1.7 }}>
+          {sw ? "Maneno ya nguvu yanayoundwa kwa ajili yako — kila siku." : "Powerful words built for you — every single day."}
+        </p>
+        <div style={{
+          background: C.goldLight, border: `1px solid ${C.goldBorder}`,
+          borderLeft: `4px solid ${C.gold}`, borderRadius: "12px",
+          padding: "20px 22px", marginBottom: "32px", textAlign: "left",
+        }}>
+          <p style={{ color: "#5C3D00", fontSize: "15px", lineHeight: 1.75, margin: 0 }}>
+            {sw
+              ? "Akili yako inaamini unachosema nafsini mwako. Anza kila asubuhi ukijikumbusha ukweli — wewe una nguvu, una uwezo, na unastahili mafanikio."
+              : "Your mind believes what you repeatedly tell it. Start each morning reminding yourself of the truth — you are capable, you belong, and you are already enough."}
+          </p>
+        </div>
+        <PrimaryBtn onClick={() => setStep("auth")}>
+          {sw ? "Anza Safari Yako →" : "Start Your Journey →"}
+        </PrimaryBtn>
+        <p style={{ color: C.muted, fontSize: "12px", marginTop: "12px", marginBottom: 0 }}>
+          {sw ? "Inachukua dakika 2 tu · Bila malipo" : "Takes only 2 minutes · Completely free"}
+        </p>
+      </div>
+    </div>
+  );
+
+  // ONBOARD 1
+  if (step === "onboard1") return (
+    <div style={page}>
+      <div style={card()}>
+        <LangToggle />
+        <ProgressBar />
+        <p style={{ color: C.muted, fontSize: "11px", margin: "0 0 6px", letterSpacing: "1px", textTransform: "uppercase" }}>
+          {sw ? "Hatua 1 ya 3" : "Step 1 of 3"}
+        </p>
+        <h2 style={{ fontSize: "24px", color: C.text, margin: "0 0 6px", fontWeight: "800" }}>
+          {sw ? "Jina lako ni nani?" : "What's your name?"}
+        </h2>
+        <p style={{ color: C.muted, fontSize: "14px", margin: "0 0 24px", lineHeight: 1.6 }}>
+          {sw ? "Maneno yako yataandikwa kwa ajili yako moja kwa moja." : "Your affirmations will speak directly and personally to you."}
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px" }}>
+          <div>
+            <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>{sw ? "Jina lako la kwanza" : "First name"}</p>
+            <input type="text" placeholder={sw ? "Jina lako..." : "Your name..."} value={profile.name} onChange={e => setProfile({ ...profile, name: e.target.value })} style={inputStyle} />
           </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
-            {/* Free plan */}
-            <div style={{ border: `1.5px solid ${C.border}`, borderRadius: "16px", padding: "22px" }}>
-              <p style={{ color: C.muted, fontSize: "10px", letterSpacing: "1.5px", fontWeight: "700", margin: "0 0 6px" }}>
-                {sw ? "BURE" : "FREE"}
-              </p>
-              <p style={{ fontSize: "28px", color: C.text, margin: "0 0 2px", fontWeight: "900" }}>Ksh 0</p>
-              <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 16px" }}>{sw ? "milele" : "forever"}</p>
-              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: "12px", marginBottom: "16px" }}>
-                {(sw
-                  ? ["Maneno mazuri ya kila siku", "Kiingereza au Kiswahili", "Bila malipo milele"]
-                  : ["Daily uplifting affirmations", "English or Kiswahili", "Always free"]
-                ).map(f => (
-                  <div key={f} style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "flex-start" }}>
-                    <span style={{ color: C.green, fontSize: "12px", marginTop: "2px", flexShrink: 0 }}>✓</span>
-                    <span style={{ color: C.muted, fontSize: "13px" }}>{f}</span>
-                  </div>
-                ))}
-                {(sw
-                  ? ["Maneno ya kibinafsi kwako", "Kulingana na hali yako"]
-                  : ["Personalized to you", "Based on your real situation"]
-                ).map(f => (
-                  <div key={f} style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "flex-start" }}>
-                    <span style={{ color: C.border, fontSize: "12px", marginTop: "2px", flexShrink: 0 }}>—</span>
-                    <span style={{ color: C.border, fontSize: "13px" }}>{f}</span>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => { setIsPremium(false); setStep("home"); }}
-                style={{
-                  border: `1.5px solid ${C.border}`, background: "transparent",
-                  borderRadius: "10px", padding: "12px", width: "100%",
-                  cursor: "pointer", fontFamily: "inherit", fontSize: "14px",
-                  color: C.muted, fontWeight: "600",
-                }}
-              >
-                {sw ? "Anza Bure" : "Start Free"}
-              </button>
-            </div>
-
-            {/* Premium plan */}
-            <div style={{
-              border: `2px solid ${C.green}`, borderRadius: "16px", padding: "22px",
-              background: C.greenLight, position: "relative",
-            }}>
-              <div style={{
-                position: "absolute", top: "-12px", left: "50%", transform: "translateX(-50%)",
-                background: C.green, color: "white", fontSize: "10px", fontWeight: "700",
-                letterSpacing: "1px", padding: "4px 14px", borderRadius: "20px", whiteSpace: "nowrap",
-              }}>
-                {sw ? "MAARUFU ZAIDI" : "MOST POPULAR"}
-              </div>
-              <p style={{ color: C.green, fontSize: "10px", letterSpacing: "1.5px", fontWeight: "700", margin: "0 0 6px" }}>
-                PREMIUM
-              </p>
-              <p style={{ fontSize: "28px", color: C.text, margin: "0 0 2px", fontWeight: "900" }}>Ksh 200</p>
-              <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 16px" }}>{sw ? "/mwezi" : "/month"}</p>
-              <div style={{ borderTop: `1px solid ${C.greenBorder}`, paddingTop: "12px", marginBottom: "16px" }}>
-                {(sw
-                  ? ["Maneno mazuri ya kila siku", "Kiingereza au Kiswahili", "Maneno ya kibinafsi kwako", "Kulingana na hali yako", "Malipo kupitia M-Pesa"]
-                  : ["Daily uplifting affirmations", "English or Kiswahili", "Personalized to your life", "Based on your real situation", "Pay easily via M-Pesa"]
-                ).map(f => (
-                  <div key={f} style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "flex-start" }}>
-                    <span style={{ color: C.green, fontSize: "12px", marginTop: "2px", flexShrink: 0 }}>✓</span>
-                    <span style={{ color: C.muted, fontSize: "13px" }}>{f}</span>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => { setIsPremium(true); setStep("home"); }}
-                style={{
-                  background: C.green, border: "none", borderRadius: "10px", padding: "12px",
-                  width: "100%", cursor: "pointer", fontFamily: "inherit", fontSize: "14px",
-                  color: "white", fontWeight: "600",
-                }}
-              >
-                {sw ? "Anza Premium" : "Start Premium"}
-              </button>
-            </div>
-          </div>
-
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-            color: C.muted, fontSize: "13px",
-          }}>
-            <span>📱</span>
-            <span>
-              {sw
-                ? "Malipo kupitia M-Pesa — Ksh 200 tu kwa mwezi"
-                : "Pay via M-Pesa — just Ksh 200 a month"}
-            </span>
+          <div>
+            <p style={{ color: C.muted, fontSize: "12px", margin: "0 0 6px" }}>{sw ? "Umri wako (18-35)" : "Your age (18-35)"}</p>
+            <input type="number" placeholder={sw ? "Umri..." : "Age..."} min="18" max="35" value={profile.age} onChange={e => setProfile({ ...profile, age: e.target.value })} style={inputStyle} />
           </div>
         </div>
+        <PrimaryBtn onClick={() => profile.name.trim() && profile.age && setStep("onboard2")} disabled={!profile.name.trim() || !profile.age}>
+          {sw ? "Endelea →" : "Continue →"}
+        </PrimaryBtn>
       </div>
-    );
+    </div>
+  );
 
-  // ── HOME ──────────────────────────────────────────────────────────────
+  // ONBOARD 2
+  if (step === "onboard2") return (
+    <div style={page}>
+      <div style={card()}>
+        <LangToggle />
+        <ProgressBar />
+        <p style={{ color: C.muted, fontSize: "11px", margin: "0 0 6px", letterSpacing: "1px", textTransform: "uppercase" }}>
+          {sw ? "Hatua 2 ya 3" : "Step 2 of 3"}
+        </p>
+        <h2 style={{ fontSize: "24px", color: C.text, margin: "0 0 6px", fontWeight: "800" }}>
+          {sw ? `Unazingatia nini zaidi, ${profile.name}?` : `What's weighing on you most, ${profile.name}?`}
+        </h2>
+        <p style={{ color: C.muted, fontSize: "14px", margin: "0 0 24px", lineHeight: 1.6 }}>
+          {sw ? "Chagua moja. Maneno yako yatazingatia eneo hili." : "Pick one. Your affirmations will be rooted in this area of your life."}
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "24px" }}>
+          {PILLARS.map(p => {
+            const sel = profile.pillar === p.id;
+            return (
+              <button key={p.id} onClick={() => setProfile({ ...profile, pillar: p.id })} style={{ background: sel ? p.light : C.bg, border: `2px solid ${sel ? p.color : C.border}`, borderRadius: "14px", padding: "16px 18px", cursor: "pointer", textAlign: "left", fontFamily: "inherit", display: "flex", alignItems: "center", gap: "14px" }}>
+                <div style={{ width: "18px", height: "18px", borderRadius: "50%", flexShrink: 0, border: `2px solid ${sel ? p.color : C.border}`, background: sel ? p.color : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {sel && <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "white" }} />}
+                </div>
+                <div>
+                  <div style={{ color: sel ? p.color : C.text, fontSize: "15px", fontWeight: "700", marginBottom: "2px" }}>{sw ? p.sw : p.en}</div>
+                  <div style={{ color: C.muted, fontSize: "13px" }}>{sw ? p.desc_sw : p.desc_en}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <PrimaryBtn onClick={() => profile.pillar && setStep("onboard3")} disabled={!profile.pillar}>
+          {sw ? "Endelea →" : "Continue →"}
+        </PrimaryBtn>
+      </div>
+    </div>
+  );
+
+  // ONBOARD 3
+  if (step === "onboard3") return (
+    <div style={page}>
+      <div style={card()}>
+        <LangToggle />
+        <ProgressBar />
+        <p style={{ color: C.muted, fontSize: "11px", margin: "0 0 6px", letterSpacing: "1px", textTransform: "uppercase" }}>
+          {sw ? "Hatua 3 ya 3" : "Step 3 of 3"}
+        </p>
+        <h2 style={{ fontSize: "24px", color: C.text, margin: "0 0 6px", fontWeight: "800" }}>
+          {sw ? "Tuambie zaidi kidogo" : "Tell us a little more"}
+        </h2>
+        <p style={{ color: C.muted, fontSize: "14px", margin: "0 0 6px", lineHeight: 1.6 }}>
+          {sw ? "Hii ndiyo sehemu muhimu zaidi. Unaandika kwa ajili yako mwenyewe." : "This is the most important part. You're writing this for yourself."}
+        </p>
+        <p style={{ color: C.muted, fontSize: "13px", margin: "0 0 20px", lineHeight: 1.6, fontStyle: "italic" }}>
+          {sw ? "Unakabiliwa na nini sasa hivi? Unajisikiaje?" : "What are you dealing with right now? How are you feeling?"}
+        </p>
+        <textarea
+          placeholder={sw ? "k.m. Nimekuwa nikitafuta kazi kwa miezi 6, ninahisi wasiwasi sana..." : "e.g. I've been job hunting for 6 months, I feel anxious about the future..."}
+          value={profile.situation}
+          onChange={e => setProfile({ ...profile, situation: e.target.value })}
+          rows={5}
+          style={{ ...inputStyle, resize: "none", lineHeight: 1.7, marginBottom: "20px" }}
+        />
+        <PrimaryBtn onClick={async () => {
+          const { data: { user: u } } = await supabase.auth.getUser();
+          if (u) await saveProfile(u.id, profile);
+          setStep("home");
+        }}>
+          {sw ? "Nionyeshe Maneno Yangu →" : "Show Me My Affirmation →"}
+        </PrimaryBtn>
+      </div>
+    </div>
+  );
+
+  // HOME
   const hour = new Date().getHours();
-  const greeting =
-    hour < 12
-      ? sw ? "Habari ya asubuhi" : "Good morning"
-      : hour < 17
-      ? sw ? "Habari ya mchana" : "Good afternoon"
-      : sw ? "Habari ya jioni" : "Good evening";
-
-  const today = new Date().toLocaleDateString(sw ? "sw-KE" : "en-KE", {
-    weekday: "long", month: "long", day: "numeric",
-  });
-
+  const greeting = hour < 12 ? (sw ? "Habari ya asubuhi" : "Good morning") : hour < 17 ? (sw ? "Habari ya mchana" : "Good afternoon") : (sw ? "Habari ya jioni" : "Good evening");
+  const today = new Date().toLocaleDateString(sw ? "sw-KE" : "en-KE", { weekday: "long", month: "long", day: "numeric" });
   const activePillar = PILLARS.find(p => p.id === profile.pillar);
 
   return (
     <div style={page}>
       <div style={{ ...card(500) }}>
-
-        {/* Top bar */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-              <span style={{ fontWeight: "900", fontSize: "18px", color: C.green, letterSpacing: "-0.5px" }}>
-                You Are Great
-              </span>
-            </div>
-            <p style={{ margin: 0, color: C.text, fontSize: "14px", fontWeight: "600" }}>
-              {greeting}, {profile.name} 👋
-            </p>
+            <span style={{ fontWeight: "900", fontSize: "18px", color: C.green, letterSpacing: "-0.5px" }}>You Are Great</span>
+            <p style={{ margin: "4px 0 0", color: C.text, fontSize: "14px", fontWeight: "600" }}>{greeting}, {profile.name} 👋</p>
             <p style={{ margin: "2px 0 0", color: C.muted, fontSize: "12px" }}>{today}</p>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
-            <div style={{
-              background: isPremium ? C.green : C.border,
-              color: "white", padding: "4px 10px", borderRadius: "20px",
-              fontSize: "10px", fontWeight: "700", letterSpacing: "1px",
-            }}>
-              {isPremium ? "PREMIUM" : sw ? "BURE" : "FREE"}
-            </div>
-            <LangToggle right />
-          </div>
+          <LangToggle right />
         </div>
 
-        {/* Stats row */}
         <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
-          <div style={{
-            flex: 1, background: C.goldLight, border: `1px solid ${C.goldBorder}`,
-            borderRadius: "12px", padding: "12px 14px",
-            display: "flex", alignItems: "center", gap: "8px",
-          }}>
+          <div style={{ flex: 1, background: C.goldLight, border: `1px solid ${C.goldBorder}`, borderRadius: "12px", padding: "12px 14px", display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={{ fontSize: "18px" }}>🔥</span>
-            <div>
-              <span style={{ color: "#7A4A00", fontSize: "15px", fontWeight: "700" }}>{streak}</span>
-              <span style={{ color: "#7A4A00", fontSize: "13px" }}>
-                {sw ? ` siku mfululizo` : `-day streak`}
-              </span>
-            </div>
+            <span style={{ color: "#7A4A00", fontSize: "14px", fontWeight: "700" }}>{streak}{sw ? " siku mfululizo" : "-day streak"}</span>
           </div>
-
           {activePillar && (
-            <div style={{
-              flex: 1, background: activePillar.light,
-              border: `1px solid ${activePillar.color}30`,
-              borderRadius: "12px", padding: "12px 14px",
-              display: "flex", alignItems: "center",
-            }}>
-              <span style={{ color: activePillar.color, fontSize: "13px", fontWeight: "700" }}>
-                {sw ? activePillar.sw : activePillar.en}
-              </span>
+            <div style={{ flex: 1, background: activePillar.light, border: `1px solid ${activePillar.color}30`, borderRadius: "12px", padding: "12px 14px", display: "flex", alignItems: "center" }}>
+              <span style={{ color: activePillar.color, fontSize: "13px", fontWeight: "700" }}>{sw ? activePillar.sw : activePillar.en}</span>
             </div>
           )}
         </div>
 
-        {/* Affirmation card */}
-        <div style={{
-          background: isPremium ? "#F0FAF4" : C.bg,
-          border: `2px solid ${isPremium ? C.greenMid : C.border}`,
-          borderRadius: "18px",
-          padding: "30px 28px",
-          marginBottom: "16px",
-          minHeight: "170px",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          position: "relative",
-        }}>
-          {isPremium && (
-            <span style={{
-              position: "absolute", top: "14px", right: "16px",
-              color: C.greenMid, fontSize: "11px", fontWeight: "600",
-            }}>
-              {sw ? "✦ imeandikwa kwa ajili yako" : "✦ written for you"}
-            </span>
-          )}
-
+        <div style={{ background: "#F0FAF4", border: `2px solid ${C.greenMid}`, borderRadius: "18px", padding: "30px 28px", marginBottom: "16px", minHeight: "170px", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative" }}>
+          <span style={{ position: "absolute", top: "14px", right: "16px", color: C.greenMid, fontSize: "11px", fontWeight: "600" }}>
+            {sw ? "✦ imeandikwa kwa ajili yako" : "✦ written for you"}
+          </span>
           {loading ? (
-            <div style={{ textAlign: "center" }}>
-              <p style={{ color: C.muted, fontSize: "15px", margin: "0 0 8px", fontStyle: "italic" }}>
-                {sw ? "Inaandika maneno yako..." : "Writing your affirmation..."}
-              </p>
-              <div style={{ display: "flex", justifyContent: "center", gap: "6px" }}>
-                {[0, 1, 2].map(i => (
-                  <div key={i} style={{
-                    width: "6px", height: "6px", borderRadius: "50%",
-                    background: C.green, opacity: 0.4 + i * 0.2,
-                  }} />
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p style={{
-              fontSize: "19px", lineHeight: 1.8, color: C.text,
-              margin: 0, fontStyle: "italic", fontWeight: "400",
-            }}>
-              "{affirmation}"
+            <p style={{ textAlign: "center", color: C.muted, fontSize: "15px", margin: 0, fontStyle: "italic" }}>
+              {sw ? "Inaandika maneno yako..." : "Writing your affirmation..."}
             </p>
+          ) : (
+            <p style={{ fontSize: "19px", lineHeight: 1.8, color: C.text, margin: 0, fontStyle: "italic" }}>"{affirmation}"</p>
           )}
         </div>
 
-        {/* Action buttons */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "16px" }}>
-          <button
-            onClick={() => fetchAffirmation()}
-            disabled={loading}
-            style={{
-              border: `1.5px solid ${C.border}`, background: "transparent",
-              borderRadius: "10px", padding: "13px", cursor: "pointer",
-              fontFamily: "inherit", fontSize: "14px", color: C.muted,
-              fontWeight: "600", opacity: loading ? 0.5 : 1,
-            }}
-          >
+          <button onClick={() => fetchAffirmation()} disabled={loading} style={{ border: `1.5px solid ${C.border}`, background: "transparent", borderRadius: "10px", padding: "13px", cursor: "pointer", fontFamily: "inherit", fontSize: "14px", color: C.muted, fontWeight: "600", opacity: loading ? 0.5 : 1 }}>
             {sw ? "↻ Maneno Mapya" : "↻ New affirmation"}
           </button>
-          <button
-            onClick={() => setSaved(s => !s)}
-            style={{
-              background: saved ? C.greenLight : C.green,
-              border: saved ? `1.5px solid ${C.green}` : "none",
-              borderRadius: "10px", padding: "13px", cursor: "pointer",
-              fontFamily: "inherit", fontSize: "14px",
-              color: saved ? C.green : "white", fontWeight: "600",
-            }}
-          >
+          <button onClick={() => setSaved(s => !s)} style={{ background: saved ? C.greenLight : C.green, border: saved ? `1.5px solid ${C.green}` : "none", borderRadius: "10px", padding: "13px", cursor: "pointer", fontFamily: "inherit", fontSize: "14px", color: saved ? C.green : "white", fontWeight: "600" }}>
             {saved ? (sw ? "✓ Imehifadhiwa" : "✓ Saved") : (sw ? "Hifadhi" : "Save")}
           </button>
         </div>
 
-        {/* Upgrade CTA (free users only) */}
-        {!isPremium && (
-          <div style={{
-            background: C.greenLight,
-            border: `1px solid ${C.greenBorder}`,
-            borderRadius: "14px", padding: "14px 16px",
-            display: "flex", alignItems: "center", gap: "12px",
-            marginBottom: "16px",
-          }}>
-            <span style={{ fontSize: "20px", flexShrink: 0 }}>✦</span>
-            <div style={{ flex: 1 }}>
-              <p style={{ margin: "0 0 2px", fontSize: "14px", color: C.green, fontWeight: "700" }}>
-                {sw ? "Pata maneno ya kibinafsi" : "Get affirmations made for you"}
-              </p>
-              <p style={{ margin: 0, fontSize: "12px", color: C.muted }}>
-                {sw ? "Ksh 200/mwezi kupitia M-Pesa" : "Ksh 200/month via M-Pesa"}
-              </p>
-            </div>
-            <button
-              onClick={() => { setIsPremium(true); fetchAffirmation(true); }}
-              style={{
-                background: C.green, color: "white", border: "none",
-                borderRadius: "8px", padding: "8px 14px", cursor: "pointer",
-                fontSize: "13px", fontFamily: "inherit", fontWeight: "600",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {sw ? "Panda Ngazi" : "Upgrade"}
-            </button>
-          </div>
-        )}
-
-        {/* YoungDev footer */}
-        <div style={{
-          textAlign: "center", paddingTop: "14px",
-          borderTop: `1px solid ${C.border}`,
-        }}>
+        <div style={{ textAlign: "center", paddingTop: "14px", borderTop: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", gap: "16px" }}>
           <p style={{ margin: 0, color: C.muted, fontSize: "12px" }}>
             {sw ? "Programu ya " : "A program by "}
             <strong style={{ color: C.green }}>YoungDev</strong>
-            {" · "}
-            {sw ? "Kujenga vijana wa Kenya" : "Building Kenya's youth"}
           </p>
+          <button onClick={handleSignOut} style={{ background: "transparent", border: "none", color: C.muted, fontSize: "12px", cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" }}>
+            {sw ? "Toka" : "Sign out"}
+          </button>
         </div>
       </div>
     </div>

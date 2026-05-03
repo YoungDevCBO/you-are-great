@@ -1,4 +1,4 @@
-{\rtf1\ansi\ansicpg1252\deff0\nouicompat{\fonttbl{\f0\fnil\fcharset0 Calibri;}{\f1\fnil Calibri;}{\f2\fnil\fcharset1 Cambria Math;}{\f3\fnil\fcharset0 Cambria Math;}{\f4\fnil\fcharset1 Segoe UI Symbol;}{\f5\fnil\fcharset1 Segoe UI Symbol;}}
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat{\fonttbl{\f0\fnil\fcharset0 Calibri;}{\f1\fnil Calibri;}{\f2\fnil\fcharset1 Cambria Math;}{\f3\fnil\fcharset1 Segoe UI Symbol;}{\f4\fnil\fcharset1 Segoe UI Symbol;}}
 {\colortbl ;\red0\green0\blue255;}
 {\*\generator Riched20 10.0.19041}{\*\mmathPr\mmathFont2\mwrapIndent1440 }\viewkind4\uc1 
 \pard\sa200\sl276\slmult1\f0\fs22\lang9 import \{ useState, useEffect, useCallback \} from "react";\par
@@ -51,7 +51,7 @@ const C = \{\par
   border: "#D6E2DA",\par
 \};\par
 \par
-async function makeAffirmation(profile, isPremium, lang) \{\par
+async function makeAffirmation(profile, lang) \{\par
   const sw = lang === "sw";\par
   const pillar = PILLARS.find(p => p.id === profile.pillar);\par
   const pillarLabel = pillar ? (sw ? pillar.sw : pillar.en) : "personal growth";\par
@@ -60,7 +60,7 @@ async function makeAffirmation(profile, isPremium, lang) \{\par
     ? "Wewe ni rafiki wa karibu na mwenye hekima. Andika maneno ya kutia moyo kwa Kiswahili safi cha Kenya. Maneno ya sasa, ya moja kwa moja. Sentensi 2 hadi 3 tu. Usiandike alama za nukuu wala utangulizi."\par
     : "You are a warm, wise friend. Write affirmations in direct, grounded English. Present tense. 2 to 3 sentences only. No quote marks, no preamble, just the words.";\par
 \par
-  const user = isPremium && profile.name\par
+  const user = profile.name\par
     ? sw\par
       ? `Andika maneno ya kutia moyo ya kibinafsi kabisa kwa $\{profile.name\}, kijana wa Kenya mwenye umri wa miaka $\{profile.age\}. Wanajishughulisha na: $\{pillarLabel\}. Hali yao ya sasa: "$\{profile.situation || "wanajaribu kupata njia yao maishani"\}". Yafanye yaonekane yameandikwa kwa ajili yao peke yao.`\par
       : `Write a deeply personal affirmation for $\{profile.name\}, a $\{profile.age\}-year-old young Kenyan focused on $\{pillarLabel\}. Their current situation: "$\{profile.situation || "finding their footing in life"\}". Make it feel like it was written for them and no one else.`\par
@@ -91,13 +91,11 @@ export default function App() \{\par
   const [step, setStep] = useState("loading");\par
   const [lang, setLang] = useState("en");\par
   const [profile, setProfile] = useState(\{ name: "", age: "", pillar: "", situation: "" \});\par
-  const [isPremium, setIsPremium] = useState(false);\par
   const [affirmation, setAffirmation] = useState("");\par
   const [loading, setLoading] = useState(false);\par
   const [saved, setSaved] = useState(false);\par
   const [streak] = useState(4);\par
-  const [user, setUser] = useState(null);\par
-  const [authMode, setAuthMode] = useState("signin");\par
+  const [authMode, setAuthMode] = useState("signup");\par
   const [authEmail, setAuthEmail] = useState("");\par
   const [authPassword, setAuthPassword] = useState("");\par
   const [authError, setAuthError] = useState("");\par
@@ -108,7 +106,6 @@ export default function App() \{\par
   useEffect(() => \{\par
     supabase.auth.getSession().then((\{ data: \{ session \} \}) => \{\par
       if (session?.user) \{\par
-        setUser(session.user);\par
         loadProfile(session.user.id);\par
       \} else \{\par
         setStep("welcome");\par
@@ -116,10 +113,7 @@ export default function App() \{\par
     \});\par
 \par
     const \{ data: \{ subscription \} \} = supabase.auth.onAuthStateChange((_event, session) => \{\par
-      if (session?.user) \{\par
-        setUser(session.user);\par
-      \} else \{\par
-        setUser(null);\par
+      if (!session?.user) \{\par
         setStep("welcome");\par
       \}\par
     \});\par
@@ -141,21 +135,20 @@ export default function App() \{\par
         pillar: data.pillar || "",\par
         situation: data.situation || "",\par
       \});\par
-      setIsPremium(data.is_premium || false);\par
       setStep("home");\par
     \} else \{\par
-      setStep("welcome");\par
+      setStep("onboard1");\par
     \}\par
   \};\par
 \par
-  const saveProfile = async (userId, profileData, premium) => \{\par
+  const saveProfile = async (userId, profileData) => \{\par
     await supabase.from("profiles").upsert(\{\par
       id: userId,\par
       name: profileData.name,\par
       age: profileData.age,\par
       pillar: profileData.pillar,\par
       situation: profileData.situation,\par
-      is_premium: premium,\par
+      is_premium: true,\par
     \});\par
   \};\par
 \par
@@ -192,17 +185,16 @@ export default function App() \{\par
   const handleSignOut = async () => \{\par
     await supabase.auth.signOut();\par
     setProfile(\{ name: "", age: "", pillar: "", situation: "" \});\par
-    setIsPremium(false);\par
     setAffirmation("");\par
     setStep("welcome");\par
   \};\par
 \par
   const fetchAffirmation = useCallback(\par
-    async (prem = isPremium, language = lang) => \{\par
+    async (language = lang) => \{\par
       setLoading(true);\par
       setSaved(false);\par
       try \{\par
-        const text = await makeAffirmation(profile, prem, language);\par
+        const text = await makeAffirmation(profile, language);\par
         setAffirmation(text);\par
       \} catch \{\par
         setAffirmation(\par
@@ -213,7 +205,7 @@ export default function App() \{\par
       \}\par
       setLoading(false);\par
     \},\par
-    [profile, isPremium, lang]\par
+    [profile, lang]\par
   );\par
 \par
   useEffect(() => \{\par
@@ -248,7 +240,7 @@ export default function App() \{\par
           key=\{l\}\par
           onClick=\{() => \{\par
             setLang(l);\par
-            if (step === "home") fetchAffirmation(isPremium, l);\par
+            if (step === "home") fetchAffirmation(l);\par
           \}\}\par
           style=\{\{\par
             padding: "4px 12px",\par
@@ -270,7 +262,7 @@ export default function App() \{\par
   );\par
 \par
   const ProgressBar = () => \{\par
-    const steps = ["onboard1", "onboard2", "onboard3", "plan"];\par
+    const steps = ["onboard1", "onboard2", "onboard3"];\par
     const idx = steps.indexOf(step);\par
     return (\par
       <div style=\{\{ display: "flex", gap: "5px", marginBottom: "18px" \}\}>\par
@@ -294,7 +286,7 @@ export default function App() \{\par
     outline: "none",\par
   \};\par
 \par
-  const PrimaryBtn = (\{ onClick, disabled, children, style = \{\} \}) => (\par
+  const PrimaryBtn = (\{ onClick, disabled, children \}) => (\par
     <button\par
       onClick=\{onClick\}\par
       disabled=\{disabled\}\par
@@ -310,17 +302,10 @@ export default function App() \{\par
         fontFamily: "inherit",\par
         fontWeight: "600",\par
         opacity: disabled ? 0.6 : 1,\par
-        ...style,\par
       \}\}\par
     >\par
       \{children\}\par
     </button>\par
-  );\par
-\par
-  const StepLabel = (\{ n \}) => (\par
-    <p style=\{\{ color: C.muted, fontSize: "11px", margin: "0 0 6px", letterSpacing: "1px", textTransform: "uppercase" \}\}>\par
-      \{sw ? `Hatua $\{n\} ya 3` : `Step $\{n\} of 3`\}\par
-    </p>\par
   );\par
 \par
   // LOADING\par
@@ -333,7 +318,7 @@ export default function App() \{\par
     </div>\par
   );\par
 \par
-  // AUTH SCREEN\par
+  // AUTH\par
   if (step === "auth") return (\par
     <div style=\{page\}>\par
       <div style=\{\{ ...card(), padding: "40px 36px" \}\}>\par
@@ -361,9 +346,7 @@ export default function App() \{\par
         </div>\par
 \par
         <div style=\{\{ marginBottom: "20px" \}\}>\par
-          <p style=\{\{ color: C.muted, fontSize: "12px", margin: "0 0 6px" \}\}>\par
-            \{sw ? "Nywila" : "Password"\}\par
-          </p>\par
+          <p style=\{\{ color: C.muted, fontSize: "12px", margin: "0 0 6px" \}\}>\{sw ? "Nywila" : "Password"\}</p>\par
           <input\par
             type="password"\par
             placeholder="\f1\bullet\bullet\bullet\bullet\bullet\bullet\bullet\bullet "\par
@@ -411,7 +394,7 @@ export default function App() \{\par
       <div style=\{\{ ...card(), padding: "44px 36px", textAlign: "center" \}\}>\par
         <LangToggle />\par
         <div style=\{\{\par
-          display: "inline-flex", alignItems: "center", gap: "8px",\par
+          display: "inline-flex", alignItems: "center",\par
           background: C.greenLight, color: C.green,\par
           fontSize: "11px", fontWeight: "700", letterSpacing: "1px",\par
           padding: "5px 14px", borderRadius: "20px", marginBottom: "28px",\par
@@ -442,7 +425,7 @@ export default function App() \{\par
           \{sw ? "Anza Safari Yako \f2\u8594?\f0 " : "Start Your Journey \f2\u8594?\f0 "\}\par
         </PrimaryBtn>\par
         <p style=\{\{ color: C.muted, fontSize: "12px", marginTop: "12px", marginBottom: 0 \}\}>\par
-          \{sw ? "Inachukua dakika 2 tu" : "Takes only 2 minutes"\}\par
+          \{sw ? "Inachukua dakika 2 tu \'b7 Bila malipo" : "Takes only 2 minutes \'b7 Completely free"\}\par
         </p>\par
       </div>\par
     </div>\par
@@ -486,7 +469,9 @@ export default function App() \{\par
       <div style=\{card()\}>\par
         <LangToggle />\par
         <ProgressBar />\par
-        <StepLabel n=\{2\} />\par
+        <p style=\{\{ color: C.muted, fontSize: "11px", margin: "0 0 6px", letterSpacing: "1px", textTransform: "uppercase" \}\}>\par
+          \{sw ? "Hatua 2 ya 3" : "Step 2 of 3"\}\par
+        </p>\par
         <h2 style=\{\{ fontSize: "24px", color: C.text, margin: "0 0 6px", fontWeight: "800" \}\}>\par
           \{sw ? `Unazingatia nini zaidi, $\{profile.name\}?` : `What's weighing on you most, $\{profile.name\}?`\}\par
         </h2>\par
@@ -522,7 +507,9 @@ export default function App() \{\par
       <div style=\{card()\}>\par
         <LangToggle />\par
         <ProgressBar />\par
-        <StepLabel n=\{3\} />\par
+        <p style=\{\{ color: C.muted, fontSize: "11px", margin: "0 0 6px", letterSpacing: "1px", textTransform: "uppercase" \}\}>\par
+          \{sw ? "Hatua 3 ya 3" : "Step 3 of 3"\}\par
+        </p>\par
         <h2 style=\{\{ fontSize: "24px", color: C.text, margin: "0 0 6px", fontWeight: "800" \}\}>\par
           \{sw ? "Tuambie zaidi kidogo" : "Tell us a little more"\}\par
         </h2>\par
@@ -539,15 +526,16 @@ export default function App() \{\par
           rows=\{5\}\par
           style=\{\{ ...inputStyle, resize: "none", lineHeight: 1.7, marginBottom: "20px" \}\}\par
         />\par
-        <PrimaryBtn onClick=\{() => setStep("plan")\}>\par
-          \{sw ? "Endelea \f2\u8594?\f0 " : "Continue \f2\u8594?\f0 "\}\par
+        <PrimaryBtn onClick=\{async () => \{\par
+          const \{ data: \{ user: u \} \} = await supabase.auth.getUser();\par
+          if (u) await saveProfile(u.id, profile);\par
+          setStep("home");\par
+        \}\}>\par
+          \{sw ? "Nionyeshe Maneno Yangu \f2\u8594?\f0 " : "Show Me My Affirmation \f2\u8594?\f0 "\}\par
         </PrimaryBtn>\par
       </div>\par
     </div>\par
   );\par
-\par
-  // PLAN\par
-  if\f3  (\f0 step\f3  === \f0 "plan"\f3 ) \{ \f0 setIsPremium\f3 (\f0 true\f3 ); \f0 setStep\f3 (\f0 "home"\f3 ); \f0 return\f3  \f0 null\f3 ; \}\f1\par
 \par
   // HOME\par
   const hour = new Date().getHours();\par
@@ -560,27 +548,17 @@ export default function App() \{\par
       <div style=\{\{ ...card(500) \}\}>\par
         <div style=\{\{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" \}\}>\par
           <div>\par
-            <div style=\{\{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" \}\}>\par
-              <span style=\{\{ fontWeight: "900", fontSize: "18px", color: C.green, letterSpacing: "-0.5px" \}\}>You Are Great</span>\par
-            </div>\par
-            <p style=\{\{ margin: 0, color: C.text, fontSize: "14px", fontWeight: "600" \}\}>\{greeting\}, \{profile.name\} \f4\u-10179?\u-9141?\f0 </p>\par
+            <span style=\{\{ fontWeight: "900", fontSize: "18px", color: C.green, letterSpacing: "-0.5px" \}\}>You Are Great</span>\par
+            <p style=\{\{ margin: "4px 0 0", color: C.text, fontSize: "14px", fontWeight: "600" \}\}>\{greeting\}, \{profile.name\} \f3\u-10179?\u-9141?\f0 </p>\par
             <p style=\{\{ margin: "2px 0 0", color: C.muted, fontSize: "12px" \}\}>\{today\}</p>\par
           </div>\par
-          <div style=\{\{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" \}\}>\par
-            <div style=\{\{ background: isPremium ? C.green : C.border, color: "white", padding: "4px 10px", borderRadius: "20px", fontSize: "10px", fontWeight: "700", letterSpacing: "1px" \}\}>\par
-              \{isPremium ? "PREMIUM" : sw ? "BURE" : "FREE"\}\par
-            </div>\par
-            <LangToggle right />\par
-          </div>\par
+          <LangToggle right />\par
         </div>\par
 \par
         <div style=\{\{ display: "flex", gap: "10px", marginBottom: "20px" \}\}>\par
           <div style=\{\{ flex: 1, background: C.goldLight, border: `1px solid $\{C.goldBorder\}`, borderRadius: "12px", padding: "12px 14px", display: "flex", alignItems: "center", gap: "8px" \}\}>\par
-            <span style=\{\{ fontSize: "18px" \}\}>\f4\u-10179?\u-8923?\f0 </span>\par
-            <div>\par
-              <span style=\{\{ color: "#7A4A00", fontSize: "15px", fontWeight: "700" \}\}>\{streak\}</span>\par
-              <span style=\{\{ color: "#7A4A00", fontSize: "13px" \}\}>\{sw ? " siku mfululizo" : "-day streak"\}</span>\par
-            </div>\par
+            <span style=\{\{ fontSize: "18px" \}\}>\f3\u-10179?\u-8923?\f0 </span>\par
+            <span style=\{\{ color: "#7A4A00", fontSize: "14px", fontWeight: "700" \}\}>\{streak\}\{sw ? " siku mfululizo" : "-day streak"\}</span>\par
           </div>\par
           \{activePillar && (\par
             <div style=\{\{ flex: 1, background: activePillar.light, border: `1px solid $\{activePillar.color\}30`, borderRadius: "12px", padding: "12px 14px", display: "flex", alignItems: "center" \}\}>\par
@@ -589,8 +567,10 @@ export default function App() \{\par
           )\}\par
         </div>\par
 \par
-        <div style=\{\{ background: isPremium ? "#F0FAF4" : C.bg, border: `2px solid $\{isPremium ? C.greenMid : C.border\}`, borderRadius: "18px", padding: "30px 28px", marginBottom: "16px", minHeight: "170px", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative" \}\}>\par
-          \{isPremium && <span style=\{\{ position: "absolute", top: "14px", right: "16px", color: C.greenMid, fontSize: "11px", fontWeight: "600" \}\}>\{sw ? "\f5\u10022?\f0  imeandikwa kwa ajili yako" : "\f5\u10022?\f0  written for you"\}</span>\}\par
+        <div style=\{\{ background: "#F0FAF4", border: `2px solid $\{C.greenMid\}`, borderRadius: "18px", padding: "30px 28px", marginBottom: "16px", minHeight: "170px", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative" \}\}>\par
+          <span style=\{\{ position: "absolute", top: "14px", right: "16px", color: C.greenMid, fontSize: "11px", fontWeight: "600" \}\}>\par
+            \{sw ? "\f4\u10022?\f0  imeandikwa kwa ajili yako" : "\f4\u10022?\f0  written for you"\}\par
+          </span>\par
           \{loading ? (\par
             <p style=\{\{ textAlign: "center", color: C.muted, fontSize: "15px", margin: 0, fontStyle: "italic" \}\}>\par
               \{sw ? "Inaandika maneno yako..." : "Writing your affirmation..."\}\par
@@ -605,22 +585,9 @@ export default function App() \{\par
             \{sw ? "\f2\u8635?\f0  Maneno Mapya" : "\f2\u8635?\f0  New affirmation"\}\par
           </button>\par
           <button onClick=\{() => setSaved(s => !s)\} style=\{\{ background: saved ? C.greenLight : C.green, border: saved ? `1.5px solid $\{C.green\}` : "none", borderRadius: "10px", padding: "13px", cursor: "pointer", fontFamily: "inherit", fontSize: "14px", color: saved ? C.green : "white", fontWeight: "600" \}\}>\par
-            \{saved ? (sw ? "\f5\u10003?\f0  Imehifadhiwa" : "\f5\u10003?\f0  Saved") : (sw ? "Hifadhi" : "Save")\}\par
+            \{saved ? (sw ? "\f4\u10003?\f0  Imehifadhiwa" : "\f4\u10003?\f0  Saved") : (sw ? "Hifadhi" : "Save")\}\par
           </button>\par
         </div>\par
-\par
-        \{!isPremium && (\par
-          <div style=\{\{ background: C.greenLight, border: `1px solid $\{C.greenBorder\}`, borderRadius: "14px", padding: "14px 16px", display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" \}\}>\par
-            <span style=\{\{ fontSize: "20px", flexShrink: 0 \}\}>\f5\u10022?\f0 </span>\par
-            <div style=\{\{ flex: 1 \}\}>\par
-              <p style=\{\{ margin: "0 0 2px", fontSize: "14px", color: C.green, fontWeight: "700" \}\}>\{sw ? "Pata maneno ya kibinafsi" : "Get affirmations made for you"\}</p>\par
-              <p style=\{\{ margin: 0, fontSize: "12px", color: C.muted \}\}>\{sw ? "Ksh 200/mwezi kupitia M-Pesa" : "Ksh 200/month via M-Pesa"\}</p>\par
-            </div>\par
-            <button onClick=\{async () => \{ setIsPremium(true); const \{ data: \{ user: u \} \} = await supabase.auth.getUser(); if (u) await saveProfile(u.id, profile, true); fetchAffirmation(true); \}\} style=\{\{ background: C.green, color: "white", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontSize: "13px", fontFamily: "inherit", fontWeight: "600", whiteSpace: "nowrap" \}\}>\par
-              \{sw ? "Panda Ngazi" : "Upgrade"\}\par
-            </button>\par
-          </div>\par
-        )\}\par
 \par
         <div style=\{\{ textAlign: "center", paddingTop: "14px", borderTop: `1px solid $\{C.border\}`, display: "flex", alignItems: "center", justifyContent: "center", gap: "16px" \}\}>\par
           <p style=\{\{ margin: 0, color: C.muted, fontSize: "12px" \}\}>\par
